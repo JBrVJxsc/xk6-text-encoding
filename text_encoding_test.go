@@ -241,7 +241,7 @@ func TestCountUTF8Bytes(t *testing.T) {
 		{
 			name:     "unicode text with emoji",
 			input:    "Hello 🌍",
-			expected: 12, // "Hello " (6 bytes) + 🌍 (4 bytes) = 10 bytes
+			expected: 10, // "Hello " (6 bytes) + 🌍 (4 bytes) = 10 bytes
 		},
 		{
 			name:     "chinese characters",
@@ -266,6 +266,7 @@ func TestCountUTF8Bytes(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("CountUTF8Bytes() = %d, want %d", result, tt.expected)
 				t.Errorf("Actual byte length: %d", len([]byte(tt.input)))
+				println(result)
 			}
 		})
 	}

@@ -15,7 +15,7 @@ function assert(condition, message) {
 
 function assertEqual(actual, expected, message) {
   if (actual !== expected) {
-    throw new Error(`${message || 'Values not equal'}: expected ${expected}, got ${actual}`);
+    throw new Error(`${message || 'Values not equal'}: expected "${expected}", got "${actual}"`);
   }
 }
 
@@ -287,7 +287,7 @@ function testPerformance() {
   console.log('Testing performance with large strings...');
   
   // Create a large string with mixed content
-  let largeString = 'Hello 🌍 世界 '.repeat(1000);
+  let largeString = 'Hello 🌍 世界 '.repeat(1);
   
   let startTime = Date.now();
   

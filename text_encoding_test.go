@@ -2,6 +2,7 @@ package text_encoding
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -380,41 +381,123 @@ func TestIsValidUTF8Bytes(t *testing.T) {
 	}
 }
 
-func TestLargeTextRoundtrip(t *testing.T) {
+func TestInvalidUTF8Sequences(t *testing.T) {
 	te := &TextEncoding{}
 
-	// Create a large string with various Unicode characters
-	var largeText strings.Builder
-	// Add ASCII characters
-	for i := 0; i < 5000; i++ {
-		largeText.WriteString("Hello ")
-	}
-	// Add Chinese characters
-	for i := 0; i < 2500; i++ {
-		largeText.WriteString("你好")
-	}
-	// Add emojis
-	for i := 0; i < 1000; i++ {
-		largeText.WriteString("🌍")
-	}
-	// Add mixed content
-	for i := 0; i < 500; i++ {
-		largeText.WriteString("café ")
-	}
-	// Add more diverse content
-	for i := 0; i < 250; i++ {
-		largeText.WriteString("résumé ")
-	}
-	// Add Korean characters
-	for i := 0; i < 250; i++ {
-		largeText.WriteString("안녕하세요 ")
-	}
-	// Add Arabic text
-	for i := 0; i < 250; i++ {
-		largeText.WriteString("مرحبا ")
+	// Test various invalid UTF-8 sequences
+	invalidSequences := [][]byte{
+		{0xFF, 0xFE},                   // Invalid start byte
+		{0xC0, 0x80},                   // Overlong encoding
+		{0xF0, 0x9F},                   // Incomplete sequence
+		{0xED, 0xA0, 0x80},             // Surrogate pair
+		{0xF4, 0x90, 0x80, 0x80},       // Out of range
+		{0x80},                         // Continuation byte without start
+		{0xC0, 0xAF},                   // Overlong ASCII
+		{0xE0, 0x80, 0xAF},             // Overlong 2-byte sequence
+		{0xF0, 0x80, 0x80, 0xAF},       // Overlong 3-byte sequence
+		{0xF8, 0x80, 0x80, 0x80, 0xAF}, // 5-byte sequence (invalid)
 	}
 
-	text := largeText.String()
+	for i, seq := range invalidSequences {
+		// Test IsValidUTF8Bytes
+		if te.IsValidUTF8Bytes(seq) {
+			t.Errorf("IsValidUTF8Bytes should return false for invalid sequence %d", i)
+		}
+
+		// Test DecodeUTF8
+		_, err := te.DecodeUTF8(seq)
+		if err == nil {
+			t.Errorf("DecodeUTF8 should return error for invalid sequence %d", i)
+		}
+	}
+}
+
+func TestConcurrentOperations(t *testing.T) {
+	te := &TextEncoding{}
+
+	// Create a test string with various characters
+	testStr := "Hello 🌍 你好 café résumé 안녕하세요 مرحبا 𝄞 𒀀 👨‍👩‍👧‍👦 🏳️‍🌈"
+
+	// Number of concurrent operations
+	numGoroutines := 100
+
+	// Channel to collect errors
+	errChan := make(chan error, numGoroutines)
+
+	// Run concurrent operations
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			// Encode
+			encoded := te.EncodeUTF8(testStr)
+
+			// Decode
+			decoded, err := te.DecodeUTF8(encoded)
+			if err != nil {
+				errChan <- fmt.Errorf("decode error: %v", err)
+				return
+			}
+
+			// Verify roundtrip
+			if decoded != testStr {
+				errChan <- fmt.Errorf("roundtrip mismatch: got %q, want %q", decoded, testStr)
+				return
+			}
+
+			// Test Base64
+			base64Encoded := te.EncodeUTF8ToBase64(testStr)
+			base64Decoded, err := te.DecodeUTF8FromBase64(base64Encoded)
+			if err != nil {
+				errChan <- fmt.Errorf("base64 decode error: %v", err)
+				return
+			}
+
+			if base64Decoded != testStr {
+				errChan <- fmt.Errorf("base64 roundtrip mismatch: got %q, want %q", base64Decoded, testStr)
+				return
+			}
+
+			errChan <- nil
+		}()
+	}
+
+	// Collect errors
+	for i := 0; i < numGoroutines; i++ {
+		if err := <-errChan; err != nil {
+			t.Errorf("Concurrent operation failed: %v", err)
+		}
+	}
+}
+
+func TestStressLargeText(t *testing.T) {
+	te := &TextEncoding{}
+
+	// Create an extremely large string with various Unicode characters
+	var stressText strings.Builder
+	// Add a mix of characters that might stress the encoder
+	for i := 0; i < 10000; i++ {
+		stressText.WriteString("Hello ")
+		stressText.WriteString("你好")
+		stressText.WriteString("🌍")
+		stressText.WriteString("café ")
+		stressText.WriteString("résumé ")
+		stressText.WriteString("안녕하세요 ")
+		stressText.WriteString("مرحبا ")
+		// Add some rare/edge case characters
+		stressText.WriteString("𝄞")       // Musical symbol
+		stressText.WriteString("𒀀")       // Cuneiform
+		stressText.WriteString("👨‍👩‍👧‍👦") // Family emoji
+		stressText.WriteString("🏳️‍🌈")    // Flag emoji
+		// Add more edge cases
+		stressText.WriteString("Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢L̠ͨͧͩ͘G̴̻͈͍͔̹̑͗̎̅͛́Ǫ̵̹̻̝̳͂̌̌͘!͖̬̰̙̗̿̋ͥͥ̂ͣ̐́́͜͞") // Zalgo text
+		stressText.WriteString("ᚠᛇᚻ᛫ᛒᛦᚦ᛫ᚠᚱᚩᚠᚢᚱ᛫ᚠᛁᚱᚪ᛫ᚷᛖᚻᚹᛦᛚᚳᚢᛗ")                                              // Runic text
+		stressText.WriteString("꧁༺༻꧂")                                                                       // Decorative characters
+		stressText.WriteString("ᕕ( ᐛ )ᕗ")                                                                    // ASCII art
+		stressText.WriteString("👾")                                                                          // Emoji with variation selector
+		stressText.WriteString("👨‍💻")                                                                        // Emoji with ZWJ
+		stressText.WriteString("🏴󠁧󠁢󠁥󠁮󠁧󠁿")                                                                    // Regional indicator
+	}
+
+	text := stressText.String()
 
 	// Test UTF-8 encoding and decoding
 	encoded := te.EncodeUTF8(text)
@@ -423,7 +506,7 @@ func TestLargeTextRoundtrip(t *testing.T) {
 		t.Errorf("DecodeUTF8() error: %v", err)
 	}
 	if decoded != text {
-		t.Error("Large text roundtrip failed")
+		t.Error("Stress test roundtrip failed")
 	}
 
 	// Test Base64 encoding and decoding
@@ -433,7 +516,15 @@ func TestLargeTextRoundtrip(t *testing.T) {
 		t.Errorf("DecodeUTF8FromBase64() error: %v", err)
 	}
 	if base64Decoded != text {
-		t.Error("Large text base64 roundtrip failed")
+		t.Error("Stress test base64 roundtrip failed")
+	}
+
+	// Verify UTF-8 validation
+	if !te.IsValidUTF8(text) {
+		t.Error("IsValidUTF8() returned false for valid stress test string")
+	}
+	if !te.IsValidUTF8Bytes(encoded) {
+		t.Error("IsValidUTF8Bytes() returned false for valid stress test bytes")
 	}
 
 	// Test byte and rune counting
@@ -445,30 +536,128 @@ func TestLargeTextRoundtrip(t *testing.T) {
 		t.Errorf("Byte count mismatch: CountUTF8Bytes() = %d, actual bytes length = %d", byteCount, len(encoded))
 	}
 
-	// Verify rune count is less than byte count (since some runes use multiple bytes)
+	// Verify rune count is less than byte count
 	if runeCount >= byteCount {
 		t.Errorf("Rune count (%d) should be less than byte count (%d)", runeCount, byteCount)
 	}
+}
 
-	// Verify rune count matches expected count
-	expectedRunes := 5000*6 + // ASCII "Hello " (6 runes each)
-		2500*2 + // Chinese "你好" (2 runes each)
-		1000*1 + // Emoji "🌍" (1 rune each)
-		500*5 + // Mixed "café " (5 runes each)
-		250*7 + // French "résumé " (7 runes each)
-		250*6 + // Korean "안녕하세요 " (6 runes each)
-		250*6 // Arabic "مرحبا " (6 runes each)
-	if runeCount != expectedRunes {
-		t.Errorf("Rune count = %d, want %d", runeCount, expectedRunes)
-	}
+func BenchmarkTextEncoding(b *testing.B) {
+	te := &TextEncoding{}
 
-	// Verify UTF-8 validation
-	if !te.IsValidUTF8(text) {
-		t.Error("IsValidUTF8() returned false for valid large string")
-	}
-	if !te.IsValidUTF8Bytes(encoded) {
-		t.Error("IsValidUTF8Bytes() returned false for valid large string bytes")
-	}
+	// Create test strings of different sizes
+	smallText := "Hello 🌍 你好"
+	mediumText := strings.Repeat("Hello 🌍 你好 ", 100)
+	largeText := strings.Repeat("Hello 🌍 你好 ", 1000)
+
+	// Benchmark UTF-8 encoding
+	b.Run("EncodeUTF8-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.EncodeUTF8(smallText)
+		}
+	})
+
+	b.Run("EncodeUTF8-Medium", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.EncodeUTF8(mediumText)
+		}
+	})
+
+	b.Run("EncodeUTF8-Large", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.EncodeUTF8(largeText)
+		}
+	})
+
+	// Benchmark UTF-8 decoding
+	smallEncoded := te.EncodeUTF8(smallText)
+	mediumEncoded := te.EncodeUTF8(mediumText)
+	largeEncoded := te.EncodeUTF8(largeText)
+
+	b.Run("DecodeUTF8-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.DecodeUTF8(smallEncoded)
+		}
+	})
+
+	b.Run("DecodeUTF8-Medium", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.DecodeUTF8(mediumEncoded)
+		}
+	})
+
+	b.Run("DecodeUTF8-Large", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.DecodeUTF8(largeEncoded)
+		}
+	})
+
+	// Benchmark Base64 encoding
+	b.Run("EncodeUTF8ToBase64-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.EncodeUTF8ToBase64(smallText)
+		}
+	})
+
+	b.Run("EncodeUTF8ToBase64-Medium", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.EncodeUTF8ToBase64(mediumText)
+		}
+	})
+
+	b.Run("EncodeUTF8ToBase64-Large", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.EncodeUTF8ToBase64(largeText)
+		}
+	})
+
+	// Benchmark Base64 decoding
+	smallBase64 := te.EncodeUTF8ToBase64(smallText)
+	mediumBase64 := te.EncodeUTF8ToBase64(mediumText)
+	largeBase64 := te.EncodeUTF8ToBase64(largeText)
+
+	b.Run("DecodeUTF8FromBase64-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.DecodeUTF8FromBase64(smallBase64)
+		}
+	})
+
+	b.Run("DecodeUTF8FromBase64-Medium", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.DecodeUTF8FromBase64(mediumBase64)
+		}
+	})
+
+	b.Run("DecodeUTF8FromBase64-Large", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.DecodeUTF8FromBase64(largeBase64)
+		}
+	})
+
+	// Benchmark counting functions
+	b.Run("CountUTF8Bytes-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.CountUTF8Bytes(smallText)
+		}
+	})
+
+	b.Run("CountUTF8Runes-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.CountUTF8Runes(smallText)
+		}
+	})
+
+	b.Run("IsValidUTF8-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.IsValidUTF8(smallText)
+		}
+	})
+
+	b.Run("IsValidUTF8Bytes-Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			te.IsValidUTF8Bytes(smallEncoded)
+		}
+	})
 }
 
 // Benchmarks

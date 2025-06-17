@@ -2,6 +2,7 @@ package text_encoding
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
 )
 
@@ -414,6 +415,51 @@ func TestIsValidUTF8Bytes(t *testing.T) {
 				t.Errorf("IsValidUTF8Bytes() = %v, want %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestLargeTextRoundtrip(t *testing.T) {
+	te := &TextEncoding{}
+
+	// Create a large string with mixed content
+	largeString := strings.Repeat("Hello 🌍 世界 ", 1000) // Repeat 1000 times to create a large string
+
+	// Test UTF-8 encoding/decoding roundtrip
+	bytes := te.EncodeUTF8(largeString)
+	decoded, err := te.DecodeUTF8(bytes)
+	if err != nil {
+		t.Errorf("DecodeUTF8() unexpected error: %v", err)
+	}
+	if decoded != largeString {
+		t.Errorf("Large string round-trip failed: expected %q, got %q", largeString, decoded)
+	}
+
+	// Test Base64 encoding/decoding roundtrip
+	base64 := te.EncodeUTF8ToBase64(largeString)
+	decodedFromBase64, err := te.DecodeUTF8FromBase64(base64)
+	if err != nil {
+		t.Errorf("DecodeUTF8FromBase64() unexpected error: %v", err)
+	}
+	if decodedFromBase64 != largeString {
+		t.Errorf("Large string base64 round-trip failed: expected %q, got %q", largeString, decodedFromBase64)
+	}
+
+	// Verify byte and rune counts
+	byteCount := te.CountUTF8Bytes(largeString)
+	runeCount := te.CountUTF8Runes(largeString)
+	if byteCount != len(bytes) {
+		t.Errorf("Byte count mismatch: CountUTF8Bytes() = %d, actual bytes length = %d", byteCount, len(bytes))
+	}
+	if runeCount > byteCount {
+		t.Errorf("Rune count (%d) should not exceed byte count (%d)", runeCount, byteCount)
+	}
+
+	// Verify validation
+	if !te.IsValidUTF8(largeString) {
+		t.Error("IsValidUTF8() returned false for valid large string")
+	}
+	if !te.IsValidUTF8Bytes(bytes) {
+		t.Error("IsValidUTF8Bytes() returned false for valid large string bytes")
 	}
 }
 

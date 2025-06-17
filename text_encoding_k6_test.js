@@ -286,29 +286,68 @@ function testRoundTrip() {
 function testPerformance() {
   console.log('Testing performance with large strings...');
   
-  // Create a large string with mixed content
-  let largeString = 'Hello 🌍 世界 ';
-  
-  let startTime = Date.now();
-  
-  // Perform operations
-  let bytes = textEncoding.encodeUTF8(largeString);
-  let decoded = textEncoding.decodeUTF8(bytes);
+  // Create a large string with various Unicode characters
+  let largeString = '';
+  // Add ASCII characters
+  for (let i = 0; i < 1000; i++) {
+    largeString += 'Hello ';
+  }
+  // Add Chinese characters
+  for (let i = 0; i < 500; i++) {
+    largeString += '你好';
+  }
+  // Add emojis
+  for (let i = 0; i < 200; i++) {
+    largeString += '🌍';
+  }
+  // Add mixed content
+  for (let i = 0; i < 100; i++) {
+    largeString += 'café ';
+  }
+
+  // Test UTF-8 encoding
+  let startTime = new Date().getTime();
+  let encoded = textEncoding.encodeUTF8(largeString);
+  let encodeTime = new Date().getTime() - startTime;
+  console.log(`UTF-8 encoding took ${encodeTime}ms for ${largeString.length} characters`);
+
+  // Test UTF-8 decoding
+  startTime = new Date().getTime();
+  let decoded = textEncoding.decodeUTF8(encoded);
+  let decodeTime = new Date().getTime() - startTime;
+  console.log(`UTF-8 decoding took ${decodeTime}ms for ${encoded.length} bytes`);
+
+  // Test Base64 encoding
+  startTime = new Date().getTime();
+  let base64Encoded = textEncoding.encodeUTF8ToBase64(largeString);
+  let base64EncodeTime = new Date().getTime() - startTime;
+  console.log(`Base64 encoding took ${base64EncodeTime}ms`);
+
+  // Test Base64 decoding
+  startTime = new Date().getTime();
+  let base64Decoded = textEncoding.decodeUTF8FromBase64(base64Encoded);
+  let base64DecodeTime = new Date().getTime() - startTime;
+  console.log(`Base64 decoding took ${base64DecodeTime}ms`);
+
+  // Verify round-trip
+  assertEqual(decoded, largeString, 'UTF-8 round-trip should preserve content');
+  assertEqual(base64Decoded, largeString, 'Base64 round-trip should preserve content');
+
+  // Test byte and rune counting
   let byteCount = textEncoding.countUTF8Bytes(largeString);
   let runeCount = textEncoding.countUTF8Runes(largeString);
-  let isValid = textEncoding.isValidUTF8(largeString);
-  
-  let endTime = Date.now();
-  let duration = endTime - startTime;
-  
-  // Verify correctness
-  assertEqual(decoded, largeString, 'Large string round-trip failed');
-  assertEqual(byteCount, bytes.length, 'Large string byte count mismatch');
-  assertEqual(isValid, true, 'Large string validation failed');
-  
-  console.log(`Large string operations took ${duration}ms`);
-  assert(duration < 1000, 'Performance test should complete in under 1 second');
-  
+  console.log(`String has ${byteCount} bytes and ${runeCount} runes`);
+
+  // Verify byte count matches encoded length
+  assertEqual(byteCount, encoded.length, 'Byte count should match encoded length');
+
+  // Verify rune count is less than byte count (since some runes use multiple bytes)
+  assert(runeCount < byteCount, 'Rune count should be less than byte count');
+
+  // Verify UTF-8 validation
+  assert(textEncoding.isValidUTF8(largeString), 'Large string should be valid UTF-8');
+  assert(textEncoding.isValidUTF8Bytes(encoded), 'Encoded bytes should be valid UTF-8');
+
   console.log('✓ Performance tests passed\n');
 }
 

@@ -32,3 +32,4 @@ go.work.sum
 # .vscode/
 
 k6
+xk6-text-encoding

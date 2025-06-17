@@ -15,15 +15,30 @@ import (
 	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/encoding/unicode"
 
+	"github.com/grafana/sobek"
+	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
 )
 
 func init() {
-	modules.Register("k6/x/text-encoding", new(TextEncoding))
+	modules.Register("k6/x/text-encoding", New())
 }
 
-// TextEncoding is the main module that will be exposed to k6 JavaScript
-type TextEncoding struct{}
+type (
+	TextEncoding struct {
+		vu      modules.VU
+		exports *sobek.Object
+	}
+	RootModule struct{}
+	Module     struct {
+		*TextEncoding
+	}
+)
+
+var (
+	_ modules.Instance = &Module{}
+	_ modules.Module   = &RootModule{}
+)
 
 // TextEncoder holds the encoding configuration
 type TextEncoder struct {
@@ -36,6 +51,9 @@ type TextDecoder struct {
 	encoding encoding.Encoding
 	label    string
 }
+
+// Utils provides utility functions for text encoding
+type Utils struct{}
 
 // Buffer pool for reusing memory
 var bufferPool = sync.Pool{
@@ -137,38 +155,119 @@ func getEncoding(label string) (encoding.Encoding, error) {
 	}
 }
 
-// NewTextEncoder creates a new TextEncoder instance
-func (*TextEncoding) NewTextEncoder(label string) (*TextEncoder, error) {
-	if label == "" {
-		label = "utf-8" // Default to UTF-8
-	}
-
-	enc, err := getEncoding(label)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TextEncoder{
-		encoding: enc,
-		label:    label,
-	}, nil
+// New creates a new instance of the root module.
+func New() *RootModule {
+	return &RootModule{}
 }
 
-// NewTextDecoder creates a new TextDecoder instance
-func (*TextEncoding) NewTextDecoder(label string) (*TextDecoder, error) {
+// NewModuleInstance creates a new instance of the TextEncoding module.
+func (*RootModule) NewModuleInstance(virtualUser modules.VU) modules.Instance {
+	runtime := virtualUser.Runtime()
+
+	// Create a new TextEncoding module.
+	moduleInstance := &Module{
+		TextEncoding: &TextEncoding{
+			vu:      virtualUser,
+			exports: runtime.NewObject(),
+		},
+	}
+
+	mustExport := func(name string, value interface{}) {
+		if err := moduleInstance.exports.Set(name, value); err != nil {
+			common.Throw(runtime, err)
+		}
+	}
+
+	// Export the constructors from the TextEncoding module to the JS code.
+	// The TextEncoder is a constructor and must be called with new, e.g. new TextEncoder(...).
+	mustExport("TextEncoder", moduleInstance.textEncoderClass)
+	// The TextDecoder is a constructor and must be called with new, e.g. new TextDecoder(...).
+	mustExport("TextDecoder", moduleInstance.textDecoderClass)
+	// The Utils is a constructor and must be called with new, e.g. new Utils().
+	mustExport("Utils", moduleInstance.utilsClass)
+
+	return moduleInstance
+}
+
+// Exports returns the exports of the TextEncoding module, which are the functions
+// that can be called from the JS code.
+func (m *Module) Exports() modules.Exports {
+	return modules.Exports{
+		Default: m.TextEncoding.exports,
+	}
+}
+
+// textEncoderClass is the JS constructor for TextEncoder
+func (m *Module) textEncoderClass(call sobek.ConstructorCall) *sobek.Object {
+	rt := m.vu.Runtime()
+
+	var label string
+	if len(call.Arguments) > 0 {
+		label = call.Arguments[0].String()
+	}
 	if label == "" {
 		label = "utf-8" // Default to UTF-8
 	}
 
 	enc, err := getEncoding(label)
 	if err != nil {
-		return nil, err
+		common.Throw(rt, err)
 	}
 
-	return &TextDecoder{
+	encoder := &TextEncoder{
 		encoding: enc,
 		label:    label,
-	}, nil
+	}
+
+	obj := rt.NewObject()
+	obj.Set("encode", encoder.Encode)
+	obj.Set("encodeString", encoder.EncodeString)
+	obj.Set("getEncoding", encoder.GetEncoding)
+
+	return obj
+}
+
+// textDecoderClass is the JS constructor for TextDecoder
+func (m *Module) textDecoderClass(call sobek.ConstructorCall) *sobek.Object {
+	rt := m.vu.Runtime()
+
+	var label string
+	if len(call.Arguments) > 0 {
+		label = call.Arguments[0].String()
+	}
+	if label == "" {
+		label = "utf-8" // Default to UTF-8
+	}
+
+	enc, err := getEncoding(label)
+	if err != nil {
+		common.Throw(rt, err)
+	}
+
+	decoder := &TextDecoder{
+		encoding: enc,
+		label:    label,
+	}
+
+	obj := rt.NewObject()
+	obj.Set("decode", decoder.Decode)
+	obj.Set("getEncoding", decoder.GetEncoding)
+
+	return obj
+}
+
+// utilsClass is the JS constructor for Utils
+func (m *Module) utilsClass(call sobek.ConstructorCall) *sobek.Object {
+	rt := m.vu.Runtime()
+
+	utils := &Utils{}
+
+	obj := rt.NewObject()
+	obj.Set("utf8ByteLength", utils.UTF8ByteLength)
+	obj.Set("isValidEncoding", utils.IsValidEncoding)
+	obj.Set("getSupportedEncodings", utils.GetSupportedEncodings)
+
+	return obj
 }
 
 // Encode encodes a string to bytes using the specified encoding
@@ -201,6 +300,11 @@ func (te *TextEncoder) EncodeString(text string) (string, error) {
 	return string(encoded), nil
 }
 
+// GetEncoding returns the encoding label
+func (te *TextEncoder) GetEncoding() string {
+	return te.label
+}
+
 // Decode decodes bytes to a string using the specified encoding
 func (td *TextDecoder) Decode(data []byte) (string, error) {
 	if len(data) == 0 {
@@ -223,23 +327,26 @@ func (td *TextDecoder) Decode(data []byte) (string, error) {
 }
 
 // GetEncoding returns the encoding label
-func (te *TextEncoder) GetEncoding() string {
-	return te.label
-}
-
-// GetEncoding returns the encoding label
 func (td *TextDecoder) GetEncoding() string {
 	return td.label
 }
 
+// UTF8ByteLength returns the byte length of a string when encoded in UTF-8
+// This is much faster than the JavaScript equivalent as it uses Go's optimized UTF-8 handling
+func (u *Utils) UTF8ByteLength(str string) int {
+	// For UTF-8, the byte length is simply len(str) since Go strings are UTF-8 encoded
+	// This is the most efficient way to get UTF-8 byte length in Go
+	return len(str)
+}
+
 // IsValidEncoding checks if the given encoding label is supported
-func (*TextEncoding) IsValidEncoding(label string) bool {
+func (u *Utils) IsValidEncoding(label string) bool {
 	_, err := getEncoding(label)
 	return err == nil
 }
 
 // GetSupportedEncodings returns a list of supported encoding labels
-func (*TextEncoding) GetSupportedEncodings() []string {
+func (u *Utils) GetSupportedEncodings() []string {
 	return []string{
 		"utf-8", "utf8",
 		"utf-16", "utf16", "utf-16le", "utf16le", "utf-16be", "utf16be",
@@ -266,31 +373,4 @@ func (*TextEncoding) GetSupportedEncodings() []string {
 		"gbk", "gb18030", "big5",
 		"euc-kr", "euckr",
 	}
-}
-
-// UTF8ByteLength returns the byte length of a string when encoded in UTF-8
-// This is much faster than the JavaScript equivalent as it uses Go's optimized UTF-8 handling
-func (*TextEncoding) UTF8ByteLength(str string) int {
-	// For UTF-8, the byte length is simply len(str) since Go strings are UTF-8 encoded
-	// This is the most efficient way to get UTF-8 byte length in Go
-	return len(str)
-}
-
-// UTF8ByteLengthOptimized is an alternative implementation that manually calculates UTF-8 byte length
-// This can be useful for educational purposes or when you need to understand the UTF-8 encoding process
-func (*TextEncoding) UTF8ByteLengthOptimized(str string) int {
-	bytes := 0
-	for _, r := range str {
-		switch {
-		case r <= 0x7f:
-			bytes += 1
-		case r <= 0x7ff:
-			bytes += 2
-		case r <= 0xffff:
-			bytes += 3
-		default:
-			bytes += 4
-		}
-	}
-	return bytes
 }

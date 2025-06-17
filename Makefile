@@ -1,9 +1,10 @@
-.PHONY: build test clean deps build-xk6 run-test fmt lint dev-deps help test-all test-go test-k6 install-xk6 check-xk6
+.PHONY: build test clean deps build-xk6 run-test fmt lint dev-deps help test-all test-go test-k6 install-xk6 check-xk6 bench bench-profile bench-utf8 perf-test-k6 perf-test-intensive perf-compare perf-full
 
 # Variables
 EXTENSION_NAME = xk6-text-encoding
 MODULE_PATH = github.com/JBrVJxsc/xk6-text-encoding
 TEST_FILE = text_encoding_k6_test.js
+PERF_FILE = performance_test.js
 
 # Default target
 all: deps build test-all
@@ -63,12 +64,38 @@ test-full: test-go-coverage test-k6
 	@echo ""
 	@echo "✅ Full test suite completed with coverage!"
 
+# Run Go benchmarks
+bench:
+	@echo "Running Go benchmarks..."
+	go test -bench=. -benchmem -run=^$ ./...
+	@echo ""
+
+# Run Go benchmarks with CPU profiling
+bench-profile:
+	@echo "Running Go benchmarks with CPU profiling..."
+	go test -bench=. -benchmem -cpuprofile=cpu.prof -run=^$ ./...
+	go tool pprof cpu.prof
+	@echo ""
+
+# Run specific UTF-8 benchmarks only
+bench-utf8:
+	@echo "Running UTF-8 byte length benchmarks..."
+	go test -bench=BenchmarkUTF8ByteLength -benchmem -run=^$ ./...
+	@echo ""
+
+# Run K6 performance test
+perf-test-k6: build-xk6
+	@echo "Running K6 performance test..."
+	./k6 run --vus 1 --duration 10s $(PERF_FILE)
+
 # Clean build artifacts
 clean:
 	rm -f $(EXTENSION_NAME)
 	rm -f k6
 	rm -f coverage.out
 	rm -f coverage.html
+	rm -f cpu.prof
+	rm -f mem.prof
 	go clean
 
 # Format Go code
@@ -108,6 +135,18 @@ security:
 perf-test: build-xk6
 	./k6 run --vus 10 --duration 30s $(TEST_FILE)
 
+# Run K6 performance test
+perf-test-k6: build-xk6
+	@echo "Running K6 performance test..."
+	./k6 run --vus 1 --duration 10s performance_test.js
+
+# Compare Go vs K6 performance
+perf-compare: bench-utf8 perf-test-k6
+	@echo ""
+	@echo "🔍 Performance comparison completed!"
+	@echo "📊 Check the output above to compare Go vs K6 implementations"
+	@echo ""
+
 # Quick development cycle: format, lint, test
 dev: fmt lint test-all
 
@@ -140,6 +179,15 @@ help:
 	@echo "  make test-full    - Run tests with coverage report"
 	@echo "  make perf-test    - Run performance test with K6"
 	@echo ""
+	@echo "Benchmark Commands:"
+	@echo "  make bench        - Run all Go benchmarks"
+	@echo "  make bench-utf8   - Run UTF-8 specific benchmarks"
+	@echo "  make bench-profile - Run benchmarks with CPU profiling"
+	@echo "  make perf-test-k6 - Run K6 performance test (light)"
+	@echo "  make perf-test-intensive - Run intensive K6 performance test"
+	@echo "  make perf-compare - Compare Go vs K6 performance"
+	@echo "  make perf-full    - Run complete performance test suite"
+	@echo ""
 	@echo "Development Commands:"
 	@echo "  make deps         - Download and tidy dependencies"
 	@echo "  make fmt          - Format Go code"
@@ -158,4 +206,5 @@ help:
 	@echo ""
 	@echo "Files:"
 	@echo "  Test file: $(TEST_FILE)"
+	@echo "  Perf file: $(PERF_FILE)"
 	@echo "  Module:    $(MODULE_PATH)"

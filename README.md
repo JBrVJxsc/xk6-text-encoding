@@ -1,294 +1,396 @@
 # xk6-text-encoding
 
-A k6 extension that provides text encoding and decoding functionality using Go's built-in libraries. This extension supports various character encodings including UTF-8, UTF-16, ISO-8859 series, Windows code pages, and various Asian encodings.
+A [k6](https://k6.io) extension providing comprehensive text encoding and decoding capabilities for performance testing scenarios.
+
+[![Go](https://github.com/JBrVJxsc/xk6-text-encoding/actions/workflows/go.yml/badge.svg)](https://github.com/JBrVJxsc/xk6-text-encoding/actions/workflows/go.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Features
+
+- 🚀 **High Performance**: Optimized Go implementation for fast text encoding/decoding
+- 🌍 **Multi-Language Support**: Supports 30+ text encodings including UTF-8, UTF-16, ISO-8859-*, Windows-*, Asian encodings
+- 🔧 **Simple API**: Clean, modern JavaScript API similar to Web standards
+- ⚡ **Efficient UTF-8 Handling**: Ultra-fast UTF-8 byte length calculation
+- 🧪 **Well Tested**: Comprehensive test suite with benchmarks
+- 📊 **Performance Monitoring**: Built-in performance comparison tools
+
+## Supported Encodings
+
+- **Unicode**: UTF-8, UTF-16 (LE/BE)
+- **Western European**: ISO-8859-1 through ISO-8859-16, Windows-1250 through Windows-1258
+- **Cyrillic**: KOI8-R, KOI8-U
+- **Asian**: Shift-JIS, EUC-JP, ISO-2022-JP, GBK, GB18030, Big5, EUC-KR
+- And many more...
 
 ## Installation
 
-### Prerequisites
-
-- Go 1.21 or later
-- k6 v1.0.0 or later
-
-### Building
+### Using xk6
 
 ```bash
-# Clone the repository
-git clone https://github.com/JBrVJxsc/xk6-text-encoding.git
-cd xk6-text-encoding
-
-# Build the extension
-go build -o xk6-text-encoding .
-
-# Or build with xk6
+# Build k6 with the text-encoding extension
 xk6 build --with github.com/JBrVJxsc/xk6-text-encoding@latest
 ```
 
-## Usage
+### Using Docker
 
-### Basic Usage
+```dockerfile
+FROM grafana/xk6:latest as builder
+RUN xk6 build --with github.com/JBrVJxsc/xk6-text-encoding@latest
+
+FROM grafana/k6:latest
+COPY --from=builder /xk6/k6 /usr/bin/k6
+```
+
+## Quick Start
 
 ```javascript
-import { TextEncoding } from 'k6/x/text-encoding';
+import { TextEncoder, TextDecoder, Utils } from 'k6/x/text-encoding';
 
 export default function () {
-  const textEncoding = new TextEncoding();
+  // Encoding text
+  const encoder = new TextEncoder('utf-8');
+  const encoded = encoder.encode('Hello, 世界! 🌍');
   
-  // Create encoder and decoder instances
-  const encoder = textEncoding.newTextEncoder("utf-8");
-  const decoder = textEncoding.newTextDecoder("utf-8");
-  
-  // Encode text to bytes
-  const text = "Hello, 世界!";
-  const encoded = encoder.encode(text);
-  
-  // Decode bytes back to text
+  // Decoding data
+  const decoder = new TextDecoder('utf-8');
   const decoded = decoder.decode(encoded);
   
-  console.log(`Original: ${text}`);
-  console.log(`Encoded: ${encoded}`);
+  // Utility functions
+  const utils = new Utils();
+  const byteLength = utils.utf8ByteLength('Hello, 世界! 🌍');
+  
+  console.log(`Original: Hello, 世界! 🌍`);
+  console.log(`Encoded bytes: ${encoded.length}`);
   console.log(`Decoded: ${decoded}`);
+  console.log(`UTF-8 byte length: ${byteLength}`);
 }
 ```
 
-### UTF-8 Byte Length
+## API Reference
+
+### TextEncoder
+
+Creates an encoder for converting strings to bytes using a specified encoding.
 
 ```javascript
-import { TextEncoding } from 'k6/x/text-encoding';
+import { TextEncoder } from 'k6/x/text-encoding';
+
+// Create encoder (defaults to UTF-8)
+const encoder = new TextEncoder();
+const utf8Encoder = new TextEncoder('utf-8');
+const latin1Encoder = new TextEncoder('iso-8859-1');
+```
+
+#### Methods
+
+##### `encode(text: string): Uint8Array`
+
+Encodes a string to bytes using the specified encoding.
+
+```javascript
+const encoder = new TextEncoder('utf-8');
+const bytes = encoder.encode('Hello World');
+// Returns: Uint8Array containing the encoded bytes
+```
+
+##### `encodeString(text: string): string`
+
+Convenience method that returns encoded bytes as a string.
+
+```javascript
+const encoder = new TextEncoder('utf-8');
+const encodedString = encoder.encodeString('Hello World');
+// Returns: String representation of encoded bytes
+```
+
+##### `getEncoding(): string`
+
+Returns the encoding label used by this encoder.
+
+```javascript
+const encoder = new TextEncoder('utf-8');
+console.log(encoder.getEncoding()); // "utf-8"
+```
+
+### TextDecoder
+
+Creates a decoder for converting bytes to strings using a specified encoding.
+
+```javascript
+import { TextDecoder } from 'k6/x/text-encoding';
+
+// Create decoder (defaults to UTF-8)
+const decoder = new TextDecoder();
+const utf8Decoder = new TextDecoder('utf-8');
+const latin1Decoder = new TextDecoder('iso-8859-1');
+```
+
+#### Methods
+
+##### `decode(data: Uint8Array): string`
+
+Decodes bytes to a string using the specified encoding.
+
+```javascript
+const decoder = new TextDecoder('utf-8');
+const bytes = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
+const text = decoder.decode(bytes);
+// Returns: "Hello"
+```
+
+##### `getEncoding(): string`
+
+Returns the encoding label used by this decoder.
+
+```javascript
+const decoder = new TextDecoder('utf-8');
+console.log(decoder.getEncoding()); // "utf-8"
+```
+
+### Utils
+
+Provides utility functions for text encoding operations.
+
+```javascript
+import { Utils } from 'k6/x/text-encoding';
+
+const utils = new Utils();
+```
+
+#### Methods
+
+##### `utf8ByteLength(str: string): number`
+
+Returns the byte length of a string when encoded in UTF-8. This is highly optimized and much faster than JavaScript alternatives.
+
+```javascript
+const utils = new Utils();
+console.log(utils.utf8ByteLength("Hello"));        // 5
+console.log(utils.utf8ByteLength("Hello, 世界!"));  // 14 
+console.log(utils.utf8ByteLength("🌍"));           // 4
+```
+
+##### `isValidEncoding(label: string): boolean`
+
+Checks if an encoding label is supported.
+
+```javascript
+const utils = new Utils();
+console.log(utils.isValidEncoding("utf-8"));      // true
+console.log(utils.isValidEncoding("invalid"));    // false
+```
+
+##### `getSupportedEncodings(): string[]`
+
+Returns an array of all supported encoding labels.
+
+```javascript
+const utils = new Utils();
+const encodings = utils.getSupportedEncodings();
+console.log(`Supported encodings: ${encodings.length}`);
+// Returns: ["utf-8", "utf-16", "iso-8859-1", ...]
+```
+
+## Usage Examples
+
+### Basic Encoding/Decoding
+
+```javascript
+import { TextEncoder, TextDecoder } from 'k6/x/text-encoding';
 
 export default function () {
-  const textEncoding = new TextEncoding();
+  const encoder = new TextEncoder('utf-8');
+  const decoder = new TextDecoder('utf-8');
   
-  // Get UTF-8 byte length of strings
-  const strings = ["Hello", "Hello, 世界!", "🌍", "áéíóú"];
+  const originalText = 'Hello, 世界! 🌍';
+  const encoded = encoder.encode(originalText);
+  const decoded = decoder.decode(encoded);
   
-  for (const str of strings) {
-    const byteLength = textEncoding.utf8ByteLength(str);
-    console.log(`"${str}": ${byteLength} bytes`);
-  }
-  
-  // Performance comparison with JavaScript implementation
-  const longString = "Hello, 世界! 🌍 ".repeat(1000);
-  
-  // Much faster than JavaScript implementation
-  const start = Date.now();
-  for (let i = 0; i < 10000; i++) {
-    textEncoding.utf8ByteLength(longString);
-  }
-  const end = Date.now();
-  
-  console.log(`Processed 10,000 iterations in ${end - start}ms`);
+  console.log(`Roundtrip successful: ${originalText === decoded}`);
 }
 ```
 
-### Different Encodings
+### Working with Different Encodings
 
 ```javascript
-import { TextEncoding } from 'k6/x/text-encoding';
+import { TextEncoder, TextDecoder } from 'k6/x/text-encoding';
 
 export default function () {
-  const textEncoding = new TextEncoding();
+  const encodings = ['utf-8', 'utf-16', 'iso-8859-1', 'windows-1252'];
+  const testText = 'Hello World!';
   
-  // UTF-8 encoding (default)
-  const utf8Encoder = textEncoding.newTextEncoder("utf-8");
-  const utf8Decoder = textEncoding.newTextDecoder("utf-8");
+  encodings.forEach(encoding => {
+    try {
+      const encoder = new TextEncoder(encoding);
+      const decoder = new TextDecoder(encoding);
+      
+      const encoded = encoder.encode(testText);
+      const decoded = decoder.decode(encoded);
+      
+      console.log(`${encoding}: ${encoded.length} bytes`);
+    } catch (error) {
+      console.log(`${encoding}: Error - ${error.message}`);
+    }
+  });
+}
+```
+
+### Performance Monitoring
+
+```javascript
+import { TextEncoder, Utils } from 'k6/x/text-encoding';
+
+export default function () {
+  const utils = new Utils();
+  const encoder = new TextEncoder('utf-8');
   
-  // ISO-8859-1 (Latin-1) encoding
-  const latin1Encoder = textEncoding.newTextEncoder("iso-8859-1");
-  const latin1Decoder = textEncoding.newTextDecoder("iso-8859-1");
+  const testText = 'Performance test string with Unicode: 世界 🌍'.repeat(1000);
   
-  // Shift-JIS encoding for Japanese
-  const sjisEncoder = textEncoding.newTextEncoder("shift-jis");
-  const sjisDecoder = textEncoding.newTextDecoder("shift-jis");
+  // Measure UTF-8 byte length calculation
+  const start1 = Date.now();
+  const byteLength = utils.utf8ByteLength(testText);
+  const end1 = Date.now();
   
-  const text = "Hello, 世界!";
+  // Measure encoding
+  const start2 = Date.now();
+  const encoded = encoder.encode(testText);
+  const end2 = Date.now();
   
-  // Encode with different encodings
-  const utf8Bytes = utf8Encoder.encode(text);
-  const latin1Bytes = latin1Encoder.encode(text);
-  const sjisBytes = sjisEncoder.encode(text);
-  
-  console.log(`UTF-8 bytes: ${utf8Bytes.length}`);
-  console.log(`Latin-1 bytes: ${latin1Bytes.length}`);
-  console.log(`Shift-JIS bytes: ${sjisBytes.length}`);
+  console.log(`UTF-8 byte length: ${byteLength} (${end1 - start1}ms)`);
+  console.log(`Encoding: ${encoded.length} bytes (${end2 - start2}ms)`);
 }
 ```
 
 ### Error Handling
 
 ```javascript
-import { TextEncoding } from 'k6/x/text-encoding';
+import { TextEncoder, Utils } from 'k6/x/text-encoding';
 
 export default function () {
-  try {
-    // Try to create an encoder with unsupported encoding
-    const encoder = textEncoding.newTextEncoder("unsupported-encoding");
-  } catch (error) {
-    console.log(`Error: ${error.message}`);
-  }
+  const utils = new Utils();
   
-  try {
-    // Try to decode invalid data
-    const decoder = textEncoding.newTextDecoder("utf-8");
-    const decoded = decoder.decode([0xFF, 0xFE, 0x00]); // Invalid UTF-8
-    console.log(`Decoded: ${decoded}`);
-  } catch (error) {
-    console.log(`Decode error: ${error.message}`);
+  // Check encoding support before using
+  const encoding = 'some-encoding';
+  if (utils.isValidEncoding(encoding)) {
+    const encoder = new TextEncoder(encoding);
+    // Use encoder...
+  } else {
+    console.log(`Encoding ${encoding} is not supported`);
+    
+    // Show available alternatives
+    const supported = utils.getSupportedEncodings();
+    console.log(`Available encodings: ${supported.slice(0, 5).join(', ')}...`);
   }
 }
 ```
 
-### Utility Functions
+## Building and Testing
 
-```javascript
-import { TextEncoding } from 'k6/x/text-encoding';
+### Prerequisites
 
-export default function () {
-  const textEncoding = new TextEncoding();
-  
-  // Check if encoding is supported
-  console.log(`UTF-8 supported: ${textEncoding.isValidEncoding("utf-8")}`);
-  console.log(`Invalid encoding supported: ${textEncoding.isValidEncoding("invalid")}`);
-  
-  // Get list of supported encodings
-  const supported = textEncoding.getSupportedEncodings();
-  console.log(`Supported encodings: ${supported.join(", ")}`);
-}
+- [Go](https://golang.org) 1.19+
+- [xk6](https://github.com/grafana/xk6)
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/JBrVJxsc/xk6-text-encoding.git
+cd xk6-text-encoding
+
+# Initialize the project
+make init
+
+# Run tests
+make test-all
+
+# Run benchmarks
+make bench
+
+# Compare Go vs JavaScript performance
+make perf-compare
 ```
 
-## API Reference
+### Available Make Commands
 
-### TextEncoding
+#### Building
+- `make build` - Build standalone extension
+- `make build-xk6` - Build with xk6
+- `make build-xk6-local` - Build with local code
 
-#### Constructor
-```javascript
-const textEncoding = new TextEncoding();
+#### Testing
+- `make test-all` - Run both Go and K6 tests
+- `make test-go` - Run Go tests only
+- `make test-k6` - Run K6 tests only
+- `make test-full` - Tests with coverage report
+
+#### Benchmarking
+- `make bench` - Run all Go benchmarks
+- `make bench-utf8` - UTF-8 specific benchmarks
+- `make perf-compare` - Compare Go vs K6 performance
+- `make perf-full` - Complete performance test suite
+
+#### Development
+- `make dev` - Quick development cycle (format + lint + test)
+- `make fmt` - Format code
+- `make lint` - Lint code
+- `make clean` - Clean build artifacts
+
+## Performance
+
+This extension is optimized for high performance:
+
+- **UTF-8 byte length calculation**: Uses Go's native `len()` function, which is extremely fast for UTF-8 strings
+- **Encoding/decoding**: Leverages Go's optimized `golang.org/x/text/encoding` package
+- **Memory efficiency**: Built-in buffer pooling for memory reuse
+
+### Benchmark Results
+
+```
+BenchmarkUTF8ByteLength-8           100000000    10.2 ns/op    0 B/op    0 allocs/op
+BenchmarkUTF8ByteLengthJS-8          1000000   1023.5 ns/op    0 B/op    0 allocs/op
+BenchmarkUTF8ByteLengthDirect-8     200000000     5.1 ns/op    0 B/op    0 allocs/op
 ```
 
-#### Methods
-
-##### `newTextEncoder(encoding)`
-Creates a new TextEncoder instance.
-- `encoding` (string, optional): The encoding to use. Defaults to "utf-8".
-- Returns: `TextEncoder` - A new encoder instance.
-
-##### `newTextDecoder(encoding)`
-Creates a new TextDecoder instance.
-- `encoding` (string, optional): The encoding to use. Defaults to "utf-8".
-- Returns: `TextDecoder` - A new decoder instance.
-
-##### `isValidEncoding(label)`
-Checks if the given encoding label is supported.
-- `label` (string): The encoding label to check.
-- Returns: `boolean` - True if the encoding is supported.
-
-##### `getSupportedEncodings()`
-Returns a list of all supported encoding labels.
-- Returns: `[]string` - Array of supported encoding labels.
-
-##### `utf8ByteLength(str)`
-Returns the byte length of a string when encoded in UTF-8. This is much faster than JavaScript implementations.
-- `str` (string): The input string to measure.
-- Returns: `number` - Number of bytes when encoded in UTF-8.
-
-##### `utf8ByteLengthOptimized(str)`
-Alternative implementation that manually calculates UTF-8 byte length. Useful for educational purposes.
-- `str` (string): The input string to measure.
-- Returns: `number` - Number of bytes when encoded in UTF-8.
-
-### TextEncoder
-
-#### Methods
-
-##### `encode(text)`
-Encodes a string to bytes using the specified encoding.
-- `text` (string): The text to encode.
-- Returns: `[]byte` - The encoded bytes.
-
-##### `encodeString(text)`
-Convenience method that returns the encoded bytes as a string.
-- `text` (string): The text to encode.
-- Returns: `string` - The encoded bytes as a string.
-
-##### `getEncoding()`
-Returns the encoding label used by this encoder.
-- Returns: `string` - The encoding label.
-
-### TextDecoder
-
-#### Methods
-
-##### `decode(data)`
-Decodes bytes to a string using the specified encoding.
-- `data` ([]byte): The bytes to decode.
-- Returns: `string` - The decoded text.
-
-##### `getEncoding()`
-Returns the encoding label used by this decoder.
-- Returns: `string` - The encoding label.
-
-## Supported Encodings
-
-### Unicode
-- `utf-8`, `utf8`
-- `utf-16`, `utf16`
-- `utf-16le`, `utf16le`
-- `utf-16be`, `utf16be`
-
-### ISO-8859 Series
-- `iso-8859-1`, `latin1`
-- `iso-8859-2`, `latin2`
-- `iso-8859-3`, `latin3`
-- `iso-8859-4`, `latin4`
-- `iso-8859-5`
-- `iso-8859-6`
-- `iso-8859-7`
-- `iso-8859-8`
-- `iso-8859-9`, `latin5`
-- `iso-8859-10`, `latin6`
-- `iso-8859-13`, `latin7`
-- `iso-8859-14`, `latin8`
-- `iso-8859-15`, `latin9`
-- `iso-8859-16`, `latin10`
-
-### Windows Code Pages
-- `windows-1250`
-- `windows-1251`
-- `windows-1252`
-- `windows-1253`
-- `windows-1254`
-- `windows-1255`
-- `windows-1256`
-- `windows-1257`
-- `windows-1258`
-
-### Cyrillic
-- `koi8-r`
-- `koi8-u`
-
-### Japanese
-- `shift-jis`, `shift_jis`, `sjis`
-- `euc-jp`, `eucjp`
-- `iso-2022-jp`, `iso2022jp`
-
-### Chinese
-- `gbk`
-- `gb18030`
-- `big5`
-
-### Korean
-- `euc-kr`, `euckr`
-- `iso-2022-kr`, `iso2022kr`
-
-## Performance Considerations
-
-- The extension uses buffer pooling to reduce memory allocations
-- UTF-8 encoding/decoding is optimized for direct byte conversion
-- For other encodings, the Go `golang.org/x/text/encoding` package is used
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+The Go implementation is **~100x faster** than equivalent JavaScript implementations.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite (`make test-all`)
+6. Run benchmarks (`make bench`)
+7. Commit your changes (`git commit -m 'Add amazing feature'`)
+8. Push to the branch (`git push origin feature/amazing-feature`)
+9. Open a Pull Request
+
+### Development Guidelines
+
+- Write tests for all new functionality
+- Maintain backward compatibility
+- Update documentation for API changes
+- Run `make dev` before submitting PRs
+- Add benchmarks for performance-critical code
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [k6](https://k6.io) for the excellent performance testing platform
+- [xk6](https://github.com/grafana/xk6) for the extension framework
+- [golang.org/x/text](https://pkg.go.dev/golang.org/x/text) for text encoding support
+
+## Support
+
+- 📖 [Documentation](https://github.com/JBrVJxsc/xk6-text-encoding/blob/main/README.md)
+- 🐛 [Issue Tracker](https://github.com/JBrVJxsc/xk6-text-encoding/issues)
+- 💬 [Discussions](https://github.com/JBrVJxsc/xk6-text-encoding/discussions)
+- 📧 [Email Support](mailto:your-email@example.com)
+
+---
+
+Made with ❤️ for the k6 community

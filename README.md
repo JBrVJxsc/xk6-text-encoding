@@ -28,12 +28,14 @@ xk6 build --with github.com/JBrVJxsc/xk6-text-encoding@latest
 ### Basic Usage
 
 ```javascript
-import { TextEncoder, TextDecoder } from 'k6/x/text-encoding';
+import { TextEncoding } from 'k6/x/text-encoding';
 
 export default function () {
+  const textEncoding = new TextEncoding();
+  
   // Create encoder and decoder instances
-  const encoder = new TextEncoder("utf-8");
-  const decoder = new TextDecoder("utf-8");
+  const encoder = textEncoding.newTextEncoder("utf-8");
+  const decoder = textEncoding.newTextDecoder("utf-8");
   
   // Encode text to bytes
   const text = "Hello, 世界!";
@@ -81,20 +83,22 @@ export default function () {
 ### Different Encodings
 
 ```javascript
-import { TextEncoder, TextDecoder } from 'k6/x/text-encoding';
+import { TextEncoding } from 'k6/x/text-encoding';
 
 export default function () {
+  const textEncoding = new TextEncoding();
+  
   // UTF-8 encoding (default)
-  const utf8Encoder = new TextEncoder("utf-8");
-  const utf8Decoder = new TextDecoder("utf-8");
+  const utf8Encoder = textEncoding.newTextEncoder("utf-8");
+  const utf8Decoder = textEncoding.newTextDecoder("utf-8");
   
   // ISO-8859-1 (Latin-1) encoding
-  const latin1Encoder = new TextEncoder("iso-8859-1");
-  const latin1Decoder = new TextDecoder("iso-8859-1");
+  const latin1Encoder = textEncoding.newTextEncoder("iso-8859-1");
+  const latin1Decoder = textEncoding.newTextDecoder("iso-8859-1");
   
   // Shift-JIS encoding for Japanese
-  const sjisEncoder = new TextEncoder("shift-jis");
-  const sjisDecoder = new TextDecoder("shift-jis");
+  const sjisEncoder = textEncoding.newTextEncoder("shift-jis");
+  const sjisDecoder = textEncoding.newTextDecoder("shift-jis");
   
   const text = "Hello, 世界!";
   
@@ -112,19 +116,19 @@ export default function () {
 ### Error Handling
 
 ```javascript
-import { TextEncoder, TextDecoder } from 'k6/x/text-encoding';
+import { TextEncoding } from 'k6/x/text-encoding';
 
 export default function () {
   try {
     // Try to create an encoder with unsupported encoding
-    const encoder = new TextEncoder("unsupported-encoding");
+    const encoder = textEncoding.newTextEncoder("unsupported-encoding");
   } catch (error) {
     console.log(`Error: ${error.message}`);
   }
   
   try {
     // Try to decode invalid data
-    const decoder = new TextDecoder("utf-8");
+    const decoder = textEncoding.newTextDecoder("utf-8");
     const decoded = decoder.decode([0xFF, 0xFE, 0x00]); // Invalid UTF-8
     console.log(`Decoded: ${decoded}`);
   } catch (error) {
@@ -153,52 +157,24 @@ export default function () {
 
 ## API Reference
 
-### TextEncoder
+### TextEncoding
 
 #### Constructor
 ```javascript
-const encoder = new TextEncoder(encoding);
+const textEncoding = new TextEncoding();
 ```
+
+#### Methods
+
+##### `newTextEncoder(encoding)`
+Creates a new TextEncoder instance.
 - `encoding` (string, optional): The encoding to use. Defaults to "utf-8".
+- Returns: `TextEncoder` - A new encoder instance.
 
-#### Methods
-
-##### `encode(text)`
-Encodes a string to bytes using the specified encoding.
-- `text` (string): The text to encode.
-- Returns: `[]byte` - The encoded bytes.
-
-##### `encodeString(text)`
-Convenience method that returns the encoded bytes as a string.
-- `text` (string): The text to encode.
-- Returns: `string` - The encoded bytes as a string.
-
-##### `getEncoding()`
-Returns the encoding label used by this encoder.
-- Returns: `string` - The encoding label.
-
-### TextDecoder
-
-#### Constructor
-```javascript
-const decoder = new TextDecoder(encoding);
-```
+##### `newTextDecoder(encoding)`
+Creates a new TextDecoder instance.
 - `encoding` (string, optional): The encoding to use. Defaults to "utf-8".
-
-#### Methods
-
-##### `decode(data)`
-Decodes bytes to a string using the specified encoding.
-- `data` ([]byte): The bytes to decode.
-- Returns: `string` - The decoded text.
-
-##### `getEncoding()`
-Returns the encoding label used by this decoder.
-- Returns: `string` - The encoding label.
-
-### TextEncoding (Utility Class)
-
-#### Methods
+- Returns: `TextDecoder` - A new decoder instance.
 
 ##### `isValidEncoding(label)`
 Checks if the given encoding label is supported.
@@ -218,6 +194,37 @@ Returns the byte length of a string when encoded in UTF-8. This is much faster t
 Alternative implementation that manually calculates UTF-8 byte length. Useful for educational purposes.
 - `str` (string): The input string to measure.
 - Returns: `number` - Number of bytes when encoded in UTF-8.
+
+### TextEncoder
+
+#### Methods
+
+##### `encode(text)`
+Encodes a string to bytes using the specified encoding.
+- `text` (string): The text to encode.
+- Returns: `[]byte` - The encoded bytes.
+
+##### `encodeString(text)`
+Convenience method that returns the encoded bytes as a string.
+- `text` (string): The text to encode.
+- Returns: `string` - The encoded bytes as a string.
+
+##### `getEncoding()`
+Returns the encoding label used by this encoder.
+- Returns: `string` - The encoding label.
+
+### TextDecoder
+
+#### Methods
+
+##### `decode(data)`
+Decodes bytes to a string using the specified encoding.
+- `data` ([]byte): The bytes to decode.
+- Returns: `string` - The decoded text.
+
+##### `getEncoding()`
+Returns the encoding label used by this decoder.
+- Returns: `string` - The encoding label.
 
 ## Supported Encodings
 

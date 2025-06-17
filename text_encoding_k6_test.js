@@ -132,7 +132,7 @@ function testDecodeUTF8() {
   assertThrows(() => textEncoding.decodeUTF8(null), 'Null input should throw error');
   
   // Empty bytes
-  let result = textEncoding.decodeUTF8(new Uint8Array(0));
+  let result = textEncoding.decodeUTF8(textEncoding.encodeUTF8(''));
   assertEqual(result, '', 'Empty bytes should produce empty string');
   
   // Valid ASCII bytes

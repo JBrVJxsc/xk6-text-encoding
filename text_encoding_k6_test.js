@@ -286,23 +286,23 @@ function testRoundTrip() {
 function testPerformance() {
   console.log('Testing performance with large strings...');
   
-  // Create a large string with mixed content
-  let largeString = 'Hello 🌍 世界 '.repeat(1);
+  // Create a string with mixed content
+  let string = 'Hello 🌍 世界 ';
   
   let startTime = Date.now();
   
   // Perform operations
-  let bytes = textEncoding.encodeUTF8(largeString);
+  let bytes = textEncoding.encodeUTF8(string);
   let decoded = textEncoding.decodeUTF8(bytes);
-  let byteCount = textEncoding.countUTF8Bytes(largeString);
-  let runeCount = textEncoding.countUTF8Runes(largeString);
-  let isValid = textEncoding.isValidUTF8(largeString);
+  let byteCount = textEncoding.countUTF8Bytes(string);
+  let runeCount = textEncoding.countUTF8Runes(string);
+  let isValid = textEncoding.isValidUTF8(string);
   
   let endTime = Date.now();
   let duration = endTime - startTime;
   
   // Verify correctness
-  assertEqual(decoded, largeString, 'Large string round-trip failed');
+  assertEqual(decoded, string, 'String round-trip failed');
   assertEqual(byteCount, bytes.length, 'Large string byte count mismatch');
   assertEqual(isValid, true, 'Large string validation failed');
   

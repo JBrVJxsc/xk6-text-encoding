@@ -92,7 +92,7 @@ function testEncodeUTF8() {
   
   // Unicode text with emoji
   result = textEncoding.encodeUTF8('Hello 🌍');
-  assertEqual(result.length, 9, 'Unicode with emoji should be 9 bytes');
+  assertEqual(result.length, 10, 'Unicode with emoji should be 10 bytes');
   
   // Chinese characters
   result = textEncoding.encodeUTF8('你好');

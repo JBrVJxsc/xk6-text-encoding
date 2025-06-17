@@ -289,20 +289,32 @@ function testPerformance() {
   // Create a large string with various Unicode characters
   let largeString = '';
   // Add ASCII characters
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < 5000; i++) {
     largeString += 'Hello ';
   }
   // Add Chinese characters
-  for (let i = 0; i < 500; i++) {
+  for (let i = 0; i < 2500; i++) {
     largeString += '你好';
   }
   // Add emojis
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 1000; i++) {
     largeString += '🌍';
   }
   // Add mixed content
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 500; i++) {
     largeString += 'café ';
+  }
+  // Add more diverse content
+  for (let i = 0; i < 250; i++) {
+    largeString += 'résumé ';
+  }
+  // Add Korean characters
+  for (let i = 0; i < 250; i++) {
+    largeString += '안녕하세요 ';
+  }
+  // Add Arabic text
+  for (let i = 0; i < 250; i++) {
+    largeString += 'مرحبا ';
   }
 
   // Test UTF-8 encoding

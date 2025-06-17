@@ -384,26 +384,90 @@ func TestLargeTextRoundtrip(t *testing.T) {
 	te := &TextEncoding{}
 
 	// Create a large string with various Unicode characters
-	largeText := strings.Repeat("Hello 🌍 你好 ", 1000)
+	var largeText strings.Builder
+	// Add ASCII characters
+	for i := 0; i < 5000; i++ {
+		largeText.WriteString("Hello ")
+	}
+	// Add Chinese characters
+	for i := 0; i < 2500; i++ {
+		largeText.WriteString("你好")
+	}
+	// Add emojis
+	for i := 0; i < 1000; i++ {
+		largeText.WriteString("🌍")
+	}
+	// Add mixed content
+	for i := 0; i < 500; i++ {
+		largeText.WriteString("café ")
+	}
+	// Add more diverse content
+	for i := 0; i < 250; i++ {
+		largeText.WriteString("résumé ")
+	}
+	// Add Korean characters
+	for i := 0; i < 250; i++ {
+		largeText.WriteString("안녕하세요 ")
+	}
+	// Add Arabic text
+	for i := 0; i < 250; i++ {
+		largeText.WriteString("مرحبا ")
+	}
+
+	text := largeText.String()
 
 	// Test UTF-8 encoding and decoding
-	encoded := te.EncodeUTF8(largeText)
+	encoded := te.EncodeUTF8(text)
 	decoded, err := te.DecodeUTF8(encoded)
 	if err != nil {
 		t.Errorf("DecodeUTF8() error: %v", err)
 	}
-	if decoded != largeText {
+	if decoded != text {
 		t.Error("Large text roundtrip failed")
 	}
 
 	// Test Base64 encoding and decoding
-	base64Encoded := te.EncodeUTF8ToBase64(largeText)
+	base64Encoded := te.EncodeUTF8ToBase64(text)
 	base64Decoded, err := te.DecodeUTF8FromBase64(base64Encoded)
 	if err != nil {
 		t.Errorf("DecodeUTF8FromBase64() error: %v", err)
 	}
-	if base64Decoded != largeText {
+	if base64Decoded != text {
 		t.Error("Large text base64 roundtrip failed")
+	}
+
+	// Test byte and rune counting
+	byteCount := te.CountUTF8Bytes(text)
+	runeCount := te.CountUTF8Runes(text)
+
+	// Verify byte count matches encoded length
+	if byteCount != len(encoded) {
+		t.Errorf("Byte count mismatch: CountUTF8Bytes() = %d, actual bytes length = %d", byteCount, len(encoded))
+	}
+
+	// Verify rune count is less than byte count (since some runes use multiple bytes)
+	if runeCount >= byteCount {
+		t.Errorf("Rune count (%d) should be less than byte count (%d)", runeCount, byteCount)
+	}
+
+	// Verify rune count matches expected count
+	expectedRunes := 5000*6 + // ASCII "Hello " (6 runes each)
+		2500*2 + // Chinese "你好" (2 runes each)
+		1000*1 + // Emoji "🌍" (1 rune each)
+		500*5 + // Mixed "café " (5 runes each)
+		250*7 + // French "résumé " (7 runes each)
+		250*6 + // Korean "안녕하세요 " (6 runes each)
+		250*6 // Arabic "مرحبا " (6 runes each)
+	if runeCount != expectedRunes {
+		t.Errorf("Rune count = %d, want %d", runeCount, expectedRunes)
+	}
+
+	// Verify UTF-8 validation
+	if !te.IsValidUTF8(text) {
+		t.Error("IsValidUTF8() returned false for valid large string")
+	}
+	if !te.IsValidUTF8Bytes(encoded) {
+		t.Error("IsValidUTF8Bytes() returned false for valid large string bytes")
 	}
 }
 

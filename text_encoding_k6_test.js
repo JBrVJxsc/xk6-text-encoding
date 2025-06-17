@@ -75,6 +75,15 @@ export default function () {
   // Test error handling
   testErrorHandling();
   
+  // Test invalid UTF-8 sequences
+  testInvalidUTF8Sequences();
+  
+  // Test concurrent operations
+  testConcurrentOperations();
+  
+  // Test stress with large strings
+  testStressLargeText();
+  
   console.log('\n=== All Tests Completed Successfully! ===');
 }
 
@@ -386,6 +395,138 @@ function testErrorHandling() {
   }
   
   console.log('✓ Error handling tests passed\n');
+}
+
+function testInvalidUTF8Sequences() {
+  console.log('Testing invalid UTF-8 sequences...');
+  
+  // Test various invalid UTF-8 sequences
+  const invalidSequences = [
+    new Uint8Array([0xFF, 0xFE]),                    // Invalid start byte
+    new Uint8Array([0xC0, 0x80]),                    // Overlong encoding
+    new Uint8Array([0xF0, 0x9F]),                    // Incomplete sequence
+    new Uint8Array([0xED, 0xA0, 0x80]),             // Surrogate pair
+    new Uint8Array([0xF4, 0x90, 0x80, 0x80]),       // Out of range
+    new Uint8Array([0x80]),                          // Continuation byte without start
+    new Uint8Array([0xC0, 0xAF]),                    // Overlong ASCII
+    new Uint8Array([0xE0, 0x80, 0xAF]),             // Overlong 2-byte sequence
+    new Uint8Array([0xF0, 0x80, 0x80, 0xAF]),       // Overlong 3-byte sequence
+    new Uint8Array([0xF8, 0x80, 0x80, 0x80, 0xAF]), // 5-byte sequence (invalid)
+  ];
+
+  for (let i = 0; i < invalidSequences.length; i++) {
+    const seq = invalidSequences[i];
+    // Test IsValidUTF8Bytes
+    assert(!textEncoding.isValidUTF8Bytes(seq), `IsValidUTF8Bytes should return false for invalid sequence ${i}`);
+    
+    // Test DecodeUTF8
+    assertThrows(() => textEncoding.decodeUTF8(seq), `DecodeUTF8 should throw for invalid sequence ${i}`);
+  }
+
+  console.log('✓ Invalid UTF-8 sequence tests passed\n');
+}
+
+function testConcurrentOperations() {
+  console.log('Testing concurrent operations...');
+  
+  // Create a test string with various characters
+  const testStr = "Hello 🌍 你好 café résumé 안녕하세요 مرحبا 𝄞 𒀀 👨‍👩‍👧‍👦 🏳️‍🌈";
+  
+  // Number of concurrent operations
+  const numOperations = 100;
+  let completed = 0;
+  let errors = [];
+  
+  // Run concurrent operations
+  for (let i = 0; i < numOperations; i++) {
+    // Encode
+    const encoded = textEncoding.encodeUTF8(testStr);
+    
+    // Decode
+    try {
+      const decoded = textEncoding.decodeUTF8(encoded);
+      // Verify roundtrip
+      assertEqual(decoded, testStr, 'UTF-8 roundtrip should preserve content');
+      
+      // Test Base64
+      const base64Encoded = textEncoding.encodeUTF8ToBase64(testStr);
+      const base64Decoded = textEncoding.decodeUTF8FromBase64(base64Encoded);
+      assertEqual(base64Decoded, testStr, 'Base64 roundtrip should preserve content');
+      
+      completed++;
+    } catch (e) {
+      errors.push(e);
+    }
+  }
+  
+  // Report results
+  assertEqual(completed, numOperations, `All ${numOperations} operations should complete successfully`);
+  if (errors.length > 0) {
+    throw new Error(`Concurrent operations failed: ${errors.join(', ')}`);
+  }
+  
+  console.log('✓ Concurrent operation tests passed\n');
+}
+
+function testStressLargeText() {
+  console.log('Testing stress with large strings...');
+  
+  // Create an extremely large string with various Unicode characters
+  let stressText = '';
+  // Add a mix of characters that might stress the encoder
+  for (let i = 0; i < 10000; i++) {
+    stressText += 'Hello ';
+    stressText += '你好';
+    stressText += '🌍';
+    stressText += 'café ';
+    stressText += 'résumé ';
+    stressText += '안녕하세요 ';
+    stressText += 'مرحبا ';
+    // Add some rare/edge case characters
+    stressText += '𝄞'; // Musical symbol
+    stressText += '𒀀'; // Cuneiform
+    stressText += '👨‍👩‍👧‍👦'; // Family emoji
+    stressText += '🏳️‍🌈'; // Flag emoji
+    // Add more edge cases
+    stressText += 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢L̠ͨͧͩ͘G̴̻͈͍͔̹̑͗̎̅͛́Ǫ̵̹̻̝̳͂̌̌͘!͖̬̰̙̗̿̋ͥͥ̂ͣ̐́́͜͞'; // Zalgo text
+    stressText += 'ᚠᛇᚻ᛫ᛒᛦᚦ᛫ᚠᚱᚩᚠᚢᚱ᛫ᚠᛁᚱᚪ᛫ᚷᛖᚻᚹᛦᛚᚳᚢᛗ'; // Runic text
+    stressText += '꧁༺༻꧂'; // Decorative characters
+    stressText += 'ᕕ( ᐛ )ᕗ'; // ASCII art
+    stressText += '👾'; // Emoji with variation selector
+    stressText += '👨‍💻'; // Emoji with ZWJ
+    stressText += '🏴󠁧󠁢󠁥󠁮󠁧󠁿'; // Regional indicator
+  }
+
+  // Test UTF-8 encoding and decoding
+  const startTime = new Date().getTime();
+  const encoded = textEncoding.encodeUTF8(stressText);
+  const encodeTime = new Date().getTime() - startTime;
+  console.log(`UTF-8 encoding took ${encodeTime}ms for ${stressText.length} characters`);
+
+  const decoded = textEncoding.decodeUTF8(encoded);
+  assertEqual(decoded, stressText, 'Stress test roundtrip should preserve content');
+
+  // Test Base64 encoding and decoding
+  const base64Encoded = textEncoding.encodeUTF8ToBase64(stressText);
+  const base64Decoded = textEncoding.decodeUTF8FromBase64(base64Encoded);
+  assertEqual(base64Decoded, stressText, 'Stress test base64 roundtrip should preserve content');
+
+  // Verify UTF-8 validation
+  assert(textEncoding.isValidUTF8(stressText), 'Stress test string should be valid UTF-8');
+  assert(textEncoding.isValidUTF8Bytes(encoded), 'Encoded stress test bytes should be valid UTF-8');
+
+  // Test byte and rune counting
+  const byteCount = textEncoding.countUTF8Bytes(stressText);
+  const runeCount = textEncoding.countUTF8Runes(stressText);
+  console.log(`Stress test string has ${byteCount} bytes and ${runeCount} runes`);
+
+  // Verify byte count matches encoded length
+  assertEqual(byteCount, encoded.length, 'Byte count should match encoded length');
+
+  // Verify rune count is less than byte count
+  assert(runeCount < byteCount, 'Rune count should be less than byte count');
+
+  console.log('✓ Stress test passed\n');
 }
 
 // Export function for running basic functionality test

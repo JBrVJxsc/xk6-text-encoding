@@ -593,6 +593,87 @@ func TestStressLargeText(t *testing.T) {
 	}
 }
 
+func TestBytesToString(t *testing.T) {
+	te := &TextEncoding{}
+
+	// Test empty bytes
+	emptyBytes := []byte{}
+	result, err := te.BytesToString(emptyBytes)
+	if err != nil {
+		t.Errorf("BytesToString() error = %v", err)
+	}
+	if result != "" {
+		t.Errorf("BytesToString() = %q, want %q", result, "")
+	}
+
+	// Test ASCII text
+	asciiBytes := []byte("Hello")
+	result, err = te.BytesToString(asciiBytes)
+	if err != nil {
+		t.Errorf("BytesToString() error = %v", err)
+	}
+	if result != "Hello" {
+		t.Errorf("BytesToString() = %q, want %q", result, "Hello")
+	}
+
+	// Test ISO-8859-1 text - using raw bytes
+	isoBytes := []byte{72, 101, 108, 108, 111, 32, 230, 248, 229} // "Hello æøå" in ISO-8859-1
+	result, err = te.BytesToString(isoBytes)
+	if err != nil {
+		t.Errorf("BytesToString() error = %v", err)
+	}
+	// The function treats bytes as raw bytes, so we expect the raw byte values
+	expected := string([]byte{72, 101, 108, 108, 111, 32, 230, 248, 229})
+	if result != expected {
+		t.Errorf("BytesToString() = %q, want %q", result, expected)
+	}
+
+	// Test binary data
+	binaryBytes := []byte{0x00, 0xFF, 0x7F, 0x80}
+	result, err = te.BytesToString(binaryBytes)
+	if err != nil {
+		t.Errorf("BytesToString() error = %v", err)
+	}
+	expected = string([]byte{0x00, 0xFF, 0x7F, 0x80})
+	if result != expected {
+		t.Errorf("BytesToString() = %q, want %q", result, expected)
+	}
+
+	// Test large input
+	largeBytes := make([]byte, 1024*1024) // 1MB
+	for i := range largeBytes {
+		largeBytes[i] = byte(i % 256)
+	}
+	result, err = te.BytesToString(largeBytes)
+	if err != nil {
+		t.Errorf("BytesToString() error = %v", err)
+	}
+	if len(result) != len(largeBytes) {
+		t.Errorf("BytesToString() length = %d, want %d", len(result), len(largeBytes))
+	}
+
+	// Test maximum size input
+	maxBytes := make([]byte, MaxInputSize)
+	result, err = te.BytesToString(maxBytes)
+	if err != nil {
+		t.Errorf("BytesToString() error = %v", err)
+	}
+	if len(result) != MaxInputSize {
+		t.Errorf("BytesToString() length = %d, want %d", len(result), MaxInputSize)
+	}
+
+	// Test oversized input
+	oversizedBytes := make([]byte, MaxInputSize+1)
+	_, err = te.BytesToString(oversizedBytes)
+	if err == nil {
+		t.Error("BytesToString() error = nil, want error")
+	}
+	expectedErr := fmt.Errorf("input size exceeds maximum allowed size of %d bytes", MaxInputSize)
+	if err.Error() != expectedErr.Error() {
+		t.Errorf("BytesToString() error = %v, want %v", err, expectedErr)
+	}
+}
+
 func BenchmarkTextEncoding(b *testing.B) {
 	te := &TextEncoding{}
 
@@ -969,6 +1050,31 @@ func BenchmarkIsValidUTF8Bytes(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				_, err := te.IsValidUTF8Bytes(tc.input)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkBytesToString(b *testing.B) {
+	te := &TextEncoding{}
+	testCases := []struct {
+		name  string
+		input []byte
+	}{
+		{"empty", []byte{}},
+		{"ascii", []byte("hello")},
+		{"iso8859", []byte("Hello æøå")},
+		{"binary", []byte{0x00, 0xFF, 0x7F, 0x80}},
+		{"large", make([]byte, 1024*1024)}, // 1MB
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err := te.BytesToString(tc.input)
 				if err != nil {
 					b.Fatal(err)
 				}

@@ -147,6 +147,19 @@ func (TextEncoding) IsValidUTF8Bytes(data []byte) (bool, error) {
 	return utf8.Valid(data), nil
 }
 
+// BytesToString converts bytes to string without UTF-8 validation.
+// Each byte is treated as a single character (ISO-8859-1 encoding).
+// This is faster than UTF-8 decoding but only works for single-byte encodings.
+func (TextEncoding) BytesToString(data []byte) (string, error) {
+	if len(data) == 0 {
+		return "", nil
+	}
+	if len(data) > MaxInputSize {
+		return "", fmt.Errorf("input size exceeds maximum allowed size of %d bytes", MaxInputSize)
+	}
+	return string(data), nil
+}
+
 // Helper function to validate input size
 func validateInputSize(size int) error {
 	if size > MaxInputSize {

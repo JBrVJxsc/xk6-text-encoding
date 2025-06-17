@@ -1,15 +1,6 @@
-# xk6-text-encoding
+# k6 Text Encoding Extension
 
-A k6 extension for text encoding and decoding operations.
-
-## Features
-
-- UTF-8 encoding and decoding
-- Base64 encoding and decoding
-- UTF-8 validation
-- Byte and rune counting
-- High performance
-- Simple API
+A k6 extension for text encoding and decoding operations, providing high-performance UTF-8 and Base64 handling.
 
 ## Installation
 
@@ -18,168 +9,142 @@ go install go.k6.io/xk6/cmd/xk6@latest
 xk6 build --with github.com/JBrVJxsc/xk6-text-encoding@latest
 ```
 
-## Quick Start
+## Usage
+
+Import the module in your k6 script:
 
 ```javascript
 import encoding from 'k6/x/text-encoding';
-
-export default function () {
-  // Create a new text encoder
-  const encoder = new encoding.TextEncoder();
-  
-  // Create a new text decoder
-  const decoder = new encoding.TextDecoder();
-
-  // Encode a string to UTF-8 bytes
-  const bytes = encoder.encode('Hello 🌍');
-  console.log('Encoded bytes:', bytes);
-
-  // Decode UTF-8 bytes back to string
-  const text = decoder.decode(bytes);
-  console.log('Decoded text:', text);
-
-  // Encode to Base64
-  const base64 = encoder.encodeToBase64('Hello 🌍');
-  console.log('Base64:', base64);
-
-  // Decode from Base64
-  const decoded = decoder.decodeFromBase64(base64);
-  console.log('Decoded from Base64:', decoded);
-
-  // Count bytes and runes
-  const byteCount = encoder.countBytes('Hello 🌍');
-  console.log('Byte count:', byteCount);
-
-  const runeCount = encoder.countRunes('Hello 🌍');
-  console.log('Rune count:', runeCount);
-
-  // Validate UTF-8
-  const isValid = encoder.isValid('Hello 🌍');
-  console.log('Is valid UTF-8:', isValid);
-}
 ```
 
-## API Reference
+### Basic Operations
 
-### TextEncoder
-
-The `TextEncoder` class provides methods for encoding text and performing UTF-8 operations.
-
-#### Methods
-
-- `encode(text: string): Uint8Array` - Encodes a string to UTF-8 bytes
-- `encodeToBase64(text: string): string` - Encodes a string to Base64
-- `countBytes(text: string): number` - Counts the number of bytes in a UTF-8 string
-- `countRunes(text: string): number` - Counts the number of runes (Unicode characters) in a string
-- `isValid(text: string): boolean` - Checks if a string is valid UTF-8
-
-### TextDecoder
-
-The `TextDecoder` class provides methods for decoding text from various encodings.
-
-#### Methods
-
-- `decode(bytes: Uint8Array): string` - Decodes UTF-8 bytes to a string
-- `decodeFromBase64(base64: string): string` - Decodes a Base64 string to a UTF-8 string
-
-## Examples
-
-### Basic Encoding and Decoding
+#### UTF-8 Encoding and Decoding
 
 ```javascript
-import encoding from 'k6/x/text-encoding';
+// Encode string to UTF-8 bytes
+const bytes = encoding.encodeUTF8('Hello 🌍');
+console.log(bytes.length); // 10 bytes
 
-export default function () {
-  const encoder = new encoding.TextEncoder();
-  const decoder = new encoding.TextDecoder();
+// Decode UTF-8 bytes to string
+const text = encoding.decodeUTF8(bytes);
+console.log(text); // "Hello 🌍"
 
-  // Simple ASCII text
-  const asciiText = 'Hello, World!';
-  const asciiBytes = encoder.encode(asciiText);
-  console.log('ASCII bytes:', asciiBytes);
-  console.log('Decoded ASCII:', decoder.decode(asciiBytes));
-
-  // Unicode text with emoji
-  const unicodeText = 'Hello 🌍 你好 안녕하세요';
-  const unicodeBytes = encoder.encode(unicodeText);
-  console.log('Unicode bytes:', unicodeBytes);
-  console.log('Decoded Unicode:', decoder.decode(unicodeBytes));
-}
+// Handle empty strings
+const emptyBytes = encoding.encodeUTF8('');
+console.log(emptyBytes.length); // 0
 ```
 
-### Base64 Operations
+#### Base64 Encoding and Decoding
 
 ```javascript
-import encoding from 'k6/x/text-encoding';
+// Encode string to Base64
+const base64 = encoding.encodeUTF8ToBase64('Hello 🌍');
+console.log(base64); // Base64 encoded string
 
-export default function () {
-  const encoder = new encoding.TextEncoder();
-  const decoder = new encoding.TextDecoder();
+// Decode Base64 to string
+const decoded = encoding.decodeUTF8FromBase64(base64);
+console.log(decoded); // "Hello 🌍"
 
-  // Encode to Base64
-  const text = 'Hello 🌍 你好';
-  const base64 = encoder.encodeToBase64(text);
-  console.log('Base64:', base64);
-
-  // Decode from Base64
-  const decoded = decoder.decodeFromBase64(base64);
-  console.log('Decoded:', decoded);
-}
+// Round-trip verification
+const original = 'café naïve résumé 中文 🚀🌍💻';
+const encoded = encoding.encodeUTF8ToBase64(original);
+const roundtrip = encoding.decodeUTF8FromBase64(encoded);
+console.log(roundtrip === original); // true
 ```
 
-### UTF-8 Validation and Counting
+#### UTF-8 Validation
 
 ```javascript
-import encoding from 'k6/x/text-encoding';
+// Check if string is valid UTF-8
+const isValid = encoding.isValidUTF8('Hello 🌍 你好');
+console.log(isValid); // true
 
-export default function () {
-  const encoder = new encoding.TextEncoder();
+// Check if bytes are valid UTF-8
+const bytes = new Uint8Array([104, 101, 108, 108, 111]); // 'hello'
+const bytesValid = encoding.isValidUTF8Bytes(bytes);
+console.log(bytesValid); // true
 
-  const text = 'Hello 🌍 你好 안녕하세요';
+// Invalid UTF-8 bytes
+const invalidBytes = new Uint8Array([0xFF, 0xFE]);
+console.log(encoding.isValidUTF8Bytes(invalidBytes)); // false
+```
 
-  // Count bytes and runes
-  const byteCount = encoder.countBytes(text);
-  const runeCount = encoder.countRunes(text);
-  console.log(`Text has ${byteCount} bytes and ${runeCount} runes`);
+#### Character and Byte Counting
 
-  // Validate UTF-8
-  const isValid = encoder.isValid(text);
-  console.log('Is valid UTF-8:', isValid);
-}
+```javascript
+// Count bytes in UTF-8 string
+const byteCount = encoding.countUTF8Bytes('Hello 🌍');
+console.log(byteCount); // 10
+
+// Count Unicode characters (runes)
+const runeCount = encoding.countUTF8Runes('Hello 🌍');
+console.log(runeCount); // 7
+
+// Examples with different character types
+console.log(encoding.countUTF8Bytes('你好')); // 6 bytes
+console.log(encoding.countUTF8Runes('你好')); // 2 runes
+console.log(encoding.countUTF8Bytes('café 🚀')); // 10 bytes
+console.log(encoding.countUTF8Runes('café 🚀')); // 6 runes
+```
+
+#### Raw Bytes to String Conversion
+
+```javascript
+// Convert bytes to string without UTF-8 validation
+const bytes = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
+const str = encoding.bytesToString(bytes);
+console.log(str); // "Hello"
+
+// Handle binary data
+const binary = new Uint8Array([0x00, 0xFF, 0x7F, 0x80]);
+const binaryStr = encoding.bytesToString(binary);
+console.log(binaryStr.length); // 4
 ```
 
 ### Error Handling
 
+The extension provides proper error handling for invalid inputs:
+
 ```javascript
-import encoding from 'k6/x/text-encoding';
+// Invalid UTF-8 bytes
+try {
+    encoding.decodeUTF8(new Uint8Array([0xFF, 0xFE]));
+} catch (e) {
+    console.log('Invalid UTF-8 bytes error:', e);
+}
 
-export default function () {
-  const encoder = new encoding.TextEncoder();
-  const decoder = new encoding.TextDecoder();
+// Invalid Base64
+try {
+    encoding.decodeUTF8FromBase64('invalid base64!@#');
+} catch (e) {
+    console.log('Invalid Base64 error:', e);
+}
 
-  try {
-    // Try to decode invalid UTF-8 bytes
-    const invalidBytes = new Uint8Array([0xFF, 0xFE]);
-    decoder.decode(invalidBytes);
-  } catch (e) {
-    console.log('Error:', e.message);
-  }
-
-  try {
-    // Try to decode invalid Base64
-    decoder.decodeFromBase64('invalid base64!');
-  } catch (e) {
-    console.log('Error:', e.message);
-  }
+// Null input
+try {
+    encoding.decodeUTF8(null);
+} catch (e) {
+    console.log('Null input error:', e);
 }
 ```
 
-## Performance Considerations
+### Performance Considerations
 
-- The extension is optimized for high performance
-- UTF-8 validation is done efficiently using Go's built-in UTF-8 validation
-- Base64 operations use Go's standard library implementation
-- Memory allocations are minimized where possible
+- The extension is optimized for high-performance text encoding/decoding
+- UTF-8 validation is performed by default for safety
+- Use `bytesToString` for raw byte conversion when UTF-8 validation is not needed
+- Large inputs (up to 100MB) are supported
+- Empty strings and null inputs are handled gracefully
+
+### Supported Character Types
+
+The extension handles various character types efficiently:
+- ASCII characters
+- Unicode characters
+- Emoji and special symbols
+- International characters (Chinese, Korean, Arabic, etc.)
+- Mixed content (ASCII + Unicode + Emoji)
 
 ## License
 

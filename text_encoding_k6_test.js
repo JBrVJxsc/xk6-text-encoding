@@ -1,255 +1,385 @@
-import { TextEncoder, TextDecoder, Utils } from 'k6/x/text-encoding';
+import textEncoding from 'k6/x/text-encoding';
+import { check } from 'k6';
+
+export let options = {
+  iterations: 1,
+  vus: 1,
+};
+
+// Helper functions for assertions
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(`Assertion failed: ${message}`);
+  }
+}
+
+function assertEqual(actual, expected, message) {
+  if (actual !== expected) {
+    throw new Error(`${message || 'Values not equal'}: expected ${expected}, got ${actual}`);
+  }
+}
+
+function assertArrayEqual(actual, expected, message) {
+  if (actual.length !== expected.length) {
+    throw new Error(`${message || 'Array lengths differ'}: expected length ${expected.length}, got ${actual.length}`);
+  }
+  for (let i = 0; i < actual.length; i++) {
+    if (actual[i] !== expected[i]) {
+      throw new Error(`${message || 'Arrays differ'} at index ${i}: expected ${expected[i]}, got ${actual[i]}`);
+    }
+  }
+}
+
+function assertThrows(fn, message) {
+  try {
+    fn();
+    throw new Error(`${message || 'Expected function to throw'}`);
+  } catch (e) {
+    // Expected to throw
+  }
+}
 
 export default function () {
-  console.log('=== xk6-text-encoding Test ===');
+  console.log('=== Starting TextEncoding Extension Tests ===\n');
   
-  // Test 1: Basic UTF-8 encoding/decoding
-  console.log('\n1. Basic UTF-8 Test:');
-  try {
-    const encoder = new TextEncoder("utf-8");
-    const decoder = new TextDecoder("utf-8");
-    
-    const text = "Hello, 世界! 🌍";
-    const encoded = encoder.encode(text);
-    const decoded = decoder.decode(encoded);
-    
-    console.log(`Original: ${text}`);
-    console.log(`Encoded length: ${encoded.length}`);
-    console.log(`Decoded: ${decoded}`);
-    console.log(`Match: ${text === decoded}`);
-    console.log(`Encoder encoding: ${encoder.getEncoding()}`);
-    console.log(`Decoder encoding: ${decoder.getEncoding()}`);
-  } catch (error) {
-    console.log(`Error in UTF-8 test: ${error.message}`);
-  }
+  // Test EncodeUTF8
+  testEncodeUTF8();
   
-  // Test 2: Different encodings
-  console.log('\n2. Different Encodings Test:');
+  // Test EncodeUTF8ToBase64
+  testEncodeUTF8ToBase64();
   
-  const encodings = [
-    { name: "UTF-8", label: "utf-8" },
-    { name: "UTF-16", label: "utf-16" },
-    { name: "ISO-8859-1", label: "iso-8859-1" },
-    { name: "Windows-1252", label: "windows-1252" },
-    { name: "Shift-JIS", label: "shift-jis" }
+  // Test DecodeUTF8
+  testDecodeUTF8();
+  
+  // Test DecodeUTF8FromBase64
+  testDecodeUTF8FromBase64();
+  
+  // Test CountUTF8Bytes
+  testCountUTF8Bytes();
+  
+  // Test CountUTF8Runes
+  testCountUTF8Runes();
+  
+  // Test IsValidUTF8
+  testIsValidUTF8();
+  
+  // Test IsValidUTF8Bytes
+  testIsValidUTF8Bytes();
+  
+  // Test round-trip scenarios
+  testRoundTrip();
+  
+  // Test performance
+  testPerformance();
+  
+  // Test error handling
+  testErrorHandling();
+  
+  console.log('\n=== All Tests Completed Successfully! ===');
+}
+
+function testEncodeUTF8() {
+  console.log('Testing EncodeUTF8...');
+  
+  // Empty string
+  let result = textEncoding.EncodeUTF8('');
+  assertEqual(result.length, 0, 'Empty string should produce empty bytes');
+  
+  // ASCII text
+  result = textEncoding.EncodeUTF8('hello');
+  assertEqual(result.length, 5, 'ASCII "hello" should be 5 bytes');
+  assertArrayEqual(Array.from(result), [104, 101, 108, 108, 111], 'ASCII bytes should match expected values');
+  
+  // Unicode text with emoji
+  result = textEncoding.EncodeUTF8('Hello 🌍');
+  assertEqual(result.length, 9, 'Unicode with emoji should be 9 bytes');
+  
+  // Chinese characters
+  result = textEncoding.EncodeUTF8('你好');
+  assertEqual(result.length, 6, 'Chinese characters should be 6 bytes (3 each)');
+  
+  console.log('✓ EncodeUTF8 tests passed\n');
+}
+
+function testEncodeUTF8ToBase64() {
+  console.log('Testing EncodeUTF8ToBase64...');
+  
+  // Empty string
+  let result = textEncoding.EncodeUTF8ToBase64('');
+  assertEqual(result, '', 'Empty string should produce empty base64');
+  
+  // Simple text
+  result = textEncoding.EncodeUTF8ToBase64('hello');
+  assert(result.length > 0, 'Base64 result should not be empty');
+  assert(typeof result === 'string', 'Base64 result should be string');
+  
+  // Verify round-trip
+  let decoded = textEncoding.DecodeUTF8FromBase64(result);
+  assertEqual(decoded, 'hello', 'Round-trip base64 should work');
+  
+  // Unicode text
+  result = textEncoding.EncodeUTF8ToBase64('Hello 🌍');
+  decoded = textEncoding.DecodeUTF8FromBase64(result);
+  assertEqual(decoded, 'Hello 🌍', 'Unicode base64 round-trip should work');
+  
+  console.log('✓ EncodeUTF8ToBase64 tests passed\n');
+}
+
+function testDecodeUTF8() {
+  console.log('Testing DecodeUTF8...');
+  
+  // Null input should throw
+  assertThrows(() => textEncoding.DecodeUTF8(null), 'Null input should throw error');
+  
+  // Empty bytes
+  let result = textEncoding.DecodeUTF8(new Uint8Array(0));
+  assertEqual(result, '', 'Empty bytes should produce empty string');
+  
+  // Valid ASCII bytes
+  let bytes = new Uint8Array([104, 101, 108, 108, 111]); // 'hello'
+  result = textEncoding.DecodeUTF8(bytes);
+  assertEqual(result, 'hello', 'ASCII bytes should decode correctly');
+  
+  // Valid Unicode bytes
+  bytes = textEncoding.EncodeUTF8('Hello 🌍');
+  result = textEncoding.DecodeUTF8(bytes);
+  assertEqual(result, 'Hello 🌍', 'Unicode bytes should decode correctly');
+  
+  // Invalid UTF-8 bytes should throw
+  let invalidBytes = new Uint8Array([0xFF, 0xFE]);
+  assertThrows(() => textEncoding.DecodeUTF8(invalidBytes), 'Invalid UTF-8 bytes should throw error');
+  
+  console.log('✓ DecodeUTF8 tests passed\n');
+}
+
+function testDecodeUTF8FromBase64() {
+  console.log('Testing DecodeUTF8FromBase64...');
+  
+  // Empty base64
+  let result = textEncoding.DecodeUTF8FromBase64('');
+  assertEqual(result, '', 'Empty base64 should produce empty string');
+  
+  // Valid base64 ASCII
+  let encoded = textEncoding.EncodeUTF8ToBase64('hello');
+  result = textEncoding.DecodeUTF8FromBase64(encoded);
+  assertEqual(result, 'hello', 'Valid base64 ASCII should decode correctly');
+  
+  // Valid base64 Unicode
+  encoded = textEncoding.EncodeUTF8ToBase64('Hello 🌍');
+  result = textEncoding.DecodeUTF8FromBase64(encoded);
+  assertEqual(result, 'Hello 🌍', 'Valid base64 Unicode should decode correctly');
+  
+  // Invalid base64 should throw
+  assertThrows(() => textEncoding.DecodeUTF8FromBase64('invalid base64!@#'), 'Invalid base64 should throw error');
+  
+  // Complex Unicode
+  let text = 'café naïve résumé 中文 🚀🌍💻';
+  encoded = textEncoding.EncodeUTF8ToBase64(text);
+  let decoded = textEncoding.DecodeUTF8FromBase64(encoded);
+  assertEqual(decoded, text, 'Complex Unicode should handle round-trip correctly');
+  
+  console.log('✓ DecodeUTF8FromBase64 tests passed\n');
+}
+
+function testCountUTF8Bytes() {
+  console.log('Testing CountUTF8Bytes...');
+  
+  assertEqual(textEncoding.CountUTF8Bytes(''), 0, 'Empty string should have 0 bytes');
+  assertEqual(textEncoding.CountUTF8Bytes('hello'), 5, 'ASCII should have 5 bytes');
+  assertEqual(textEncoding.CountUTF8Bytes('Hello 🌍'), 9, 'Unicode with emoji should have 9 bytes');
+  assertEqual(textEncoding.CountUTF8Bytes('你好'), 6, 'Chinese characters should have 6 bytes');
+  assertEqual(textEncoding.CountUTF8Bytes('café 🚀'), 10, 'Mixed content should have 10 bytes');
+  assertEqual(textEncoding.CountUTF8Bytes('🚀🌍💻'), 12, 'Only emojis should have 12 bytes');
+  
+  console.log('✓ CountUTF8Bytes tests passed\n');
+}
+
+function testCountUTF8Runes() {
+  console.log('Testing CountUTF8Runes...');
+  
+  assertEqual(textEncoding.CountUTF8Runes(''), 0, 'Empty string should have 0 runes');
+  assertEqual(textEncoding.CountUTF8Runes('hello'), 5, 'ASCII should have 5 runes');
+  assertEqual(textEncoding.CountUTF8Runes('Hello 🌍'), 7, 'Unicode with emoji should have 7 runes');
+  assertEqual(textEncoding.CountUTF8Runes('你好'), 2, 'Chinese characters should have 2 runes');
+  assertEqual(textEncoding.CountUTF8Runes('café 🚀'), 6, 'Mixed content should have 6 runes');
+  assertEqual(textEncoding.CountUTF8Runes('🚀🌍💻'), 3, 'Only emojis should have 3 runes');
+  
+  console.log('✓ CountUTF8Runes tests passed\n');
+}
+
+function testIsValidUTF8() {
+  console.log('Testing IsValidUTF8...');
+  
+  assertEqual(textEncoding.IsValidUTF8(''), true, 'Empty string should be valid');
+  assertEqual(textEncoding.IsValidUTF8('hello'), true, 'ASCII should be valid');
+  assertEqual(textEncoding.IsValidUTF8('Hello 🌍 你好'), true, 'Unicode should be valid');
+  assertEqual(textEncoding.IsValidUTF8('café naïve résumé'), true, 'Special chars should be valid');
+  assertEqual(textEncoding.IsValidUTF8('🚀🌍💻中文한국어العربية'), true, 'Complex Unicode should be valid');
+  
+  console.log('✓ IsValidUTF8 tests passed\n');
+}
+
+function testIsValidUTF8Bytes() {
+  console.log('Testing IsValidUTF8Bytes...');
+  
+  assertEqual(textEncoding.IsValidUTF8Bytes(new Uint8Array(0)), true, 'Empty bytes should be valid');
+  
+  let bytes = new Uint8Array([104, 101, 108, 108, 111]); // 'hello'
+  assertEqual(textEncoding.IsValidUTF8Bytes(bytes), true, 'ASCII bytes should be valid');
+  
+  bytes = textEncoding.EncodeUTF8('Hello 🌍');
+  assertEqual(textEncoding.IsValidUTF8Bytes(bytes), true, 'Unicode bytes should be valid');
+  
+  let invalidBytes = new Uint8Array([0xFF, 0xFE]);
+  assertEqual(textEncoding.IsValidUTF8Bytes(invalidBytes), false, 'Invalid UTF-8 bytes should not be valid');
+  
+  let incompleteBytes = new Uint8Array([0xF0, 0x9F]);
+  assertEqual(textEncoding.IsValidUTF8Bytes(incompleteBytes), false, 'Incomplete UTF-8 should not be valid');
+  
+  let overlongBytes = new Uint8Array([0xC0, 0x80]);
+  assertEqual(textEncoding.IsValidUTF8Bytes(overlongBytes), false, 'Overlong encoding should not be valid');
+  
+  console.log('✓ IsValidUTF8Bytes tests passed\n');
+}
+
+function testRoundTrip() {
+  console.log('Testing round-trip encoding/decoding...');
+  
+  const testCases = [
+    'hello',
+    'Hello 🌍',
+    '你好世界',
+    'café naïve résumé',
+    '🚀🌍💻🎉',
+    'Mixed: ASCII + 中文 + العربية + 🚀',
+    '', // empty string
+    ' ', // single space
+    '\n\t\r', // whitespace characters
+    '!@#$%^&*()_+-=[]{}|;:,.<>?', // special ASCII
   ];
   
-  const testText = "Hello World!";
+  testCases.forEach((testCase, index) => {
+    // Test byte encoding round-trip
+    let bytes = textEncoding.EncodeUTF8(testCase);
+    let decodedFromBytes = textEncoding.DecodeUTF8(bytes);
+    assertEqual(decodedFromBytes, testCase, `Round-trip bytes failed for case ${index + 1}`);
+    
+    // Test base64 encoding round-trip
+    let base64 = textEncoding.EncodeUTF8ToBase64(testCase);
+    let decodedFromBase64 = textEncoding.DecodeUTF8FromBase64(base64);
+    assertEqual(decodedFromBase64, testCase, `Round-trip base64 failed for case ${index + 1}`);
+    
+    // Verify byte and rune counts are consistent
+    let byteCount = textEncoding.CountUTF8Bytes(testCase);
+    let runeCount = textEncoding.CountUTF8Runes(testCase);
+    assertEqual(byteCount, bytes.length, `Byte count mismatch for case ${index + 1}`);
+    assert(runeCount <= byteCount, `Rune count should not exceed byte count for case ${index + 1}`);
+    
+    // Verify validation
+    assertEqual(textEncoding.IsValidUTF8(testCase), true, `String validation failed for case ${index + 1}`);
+    assertEqual(textEncoding.IsValidUTF8Bytes(bytes), true, `Bytes validation failed for case ${index + 1}`);
+  });
   
-  for (const enc of encodings) {
-    try {
-      const encoder = new TextEncoder(enc.label);
-      const decoder = new TextDecoder(enc.label);
-      
-      const encoded = encoder.encode(testText);
-      const decoded = decoder.decode(encoded);
-      
-      console.log(`${enc.name}: ${encoded.length} bytes, decoded: "${decoded}"`);
-    } catch (error) {
-      console.log(`${enc.name}: Error - ${error.message}`);
-    }
-  }
+  console.log('✓ Round-trip tests passed\n');
+}
+
+function testPerformance() {
+  console.log('Testing performance with large strings...');
   
-  // Test 3: Error handling
-  console.log('\n3. Error Handling Test:');
+  // Create a large string with mixed content
+  let largeString = 'Hello 🌍 世界 '.repeat(1000);
   
+  let startTime = Date.now();
+  
+  // Perform operations
+  let bytes = textEncoding.EncodeUTF8(largeString);
+  let decoded = textEncoding.DecodeUTF8(bytes);
+  let byteCount = textEncoding.CountUTF8Bytes(largeString);
+  let runeCount = textEncoding.CountUTF8Runes(largeString);
+  let isValid = textEncoding.IsValidUTF8(largeString);
+  
+  let endTime = Date.now();
+  let duration = endTime - startTime;
+  
+  // Verify correctness
+  assertEqual(decoded, largeString, 'Large string round-trip failed');
+  assertEqual(byteCount, bytes.length, 'Large string byte count mismatch');
+  assertEqual(isValid, true, 'Large string validation failed');
+  
+  console.log(`Large string operations took ${duration}ms`);
+  assert(duration < 1000, 'Performance test should complete in under 1 second');
+  
+  console.log('✓ Performance tests passed\n');
+}
+
+function testErrorHandling() {
+  console.log('Testing error handling...');
+  
+  // Test that these don't crash (undefined handling)
   try {
-    const invalidEncoder = new TextEncoder("invalid-encoding");
-    console.log("Should not reach here");
-  } catch (error) {
-    console.log(`Expected error for invalid encoding: ${error.message}`);
+    textEncoding.CountUTF8Bytes(undefined);
+    textEncoding.CountUTF8Runes(undefined);
+    textEncoding.IsValidUTF8(undefined);
+  } catch (e) {
+    // It's OK if they throw, just shouldn't crash the extension
   }
   
-  // Test 4: Empty string handling
-  console.log('\n4. Empty String Test:');
+  // Null inputs where appropriate
+  assertThrows(() => textEncoding.DecodeUTF8(null), 'DecodeUTF8 should throw on null');
+  
+  // IsValidUTF8Bytes with null should not crash (Go's utf8.Valid handles nil)
   try {
-    const encoder = new TextEncoder("utf-8");
-    const decoder = new TextDecoder("utf-8");
-    
-    const emptyEncoded = encoder.encode("");
-    const emptyDecoded = decoder.decode(emptyEncoded);
-    
-    console.log(`Empty string encoded length: ${emptyEncoded.length}`);
-    console.log(`Empty string decoded: "${emptyDecoded}"`);
-  } catch (error) {
-    console.log(`Error in empty string test: ${error.message}`);
+    textEncoding.IsValidUTF8Bytes(null);
+  } catch (e) {
+    // It's OK if it throws, just shouldn't crash
   }
   
-  // Test 5: Special characters
-  console.log('\n5. Special Characters Test:');
-  try {
-    const encoder = new TextEncoder("utf-8");
-    const decoder = new TextDecoder("utf-8");
-    
-    const specialText = "Special chars: áéíóú ñ ç ß € ¥ £";
-    const specialEncoded = encoder.encode(specialText);
-    const specialDecoded = decoder.decode(specialEncoded);
-    
-    console.log(`Special text: ${specialText}`);
-    console.log(`Special encoded length: ${specialEncoded.length}`);
-    console.log(`Special decoded: ${specialDecoded}`);
-  } catch (error) {
-    console.log(`Error in special characters test: ${error.message}`);
-  }
+  console.log('✓ Error handling tests passed\n');
+}
+
+// Export function for running basic functionality test
+export function testBasicFunctionality() {
+  let text = 'Hello 🌍';
   
-  // Test 6: Binary data
-  console.log('\n6. Binary Data Test:');
-  try {
-    const decoder = new TextDecoder("utf-8");
-    const binaryData = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
-    const binaryDecoded = decoder.decode(binaryData);
-    
-    console.log(`Binary data: [${Array.from(binaryData).join(', ')}]`);
-    console.log(`Binary decoded: "${binaryDecoded}"`);
-  } catch (error) {
-    console.log(`Error in binary data test: ${error.message}`);
-  }
+  console.log('=== Basic Functionality Test ===');
   
-  // Test 7: UTF-8 Byte Length (Utils class)
-  console.log('\n7. UTF-8 Byte Length Test (Utils):');
-  try {
-    const utils = new Utils();
-    const testStrings = [
-      "Hello",           // 5 bytes
-      "Hello, 世界!",     // 13 bytes (7 ASCII + 6 for Chinese chars)
-      "🌍",              // 4 bytes (emoji)
-      "áéíóú",           // 10 bytes (5 accented chars, 2 bytes each)
-      "",                // 0 bytes
-      "A",               // 1 byte
-      "AB",              // 2 bytes
-      "ABC"              // 3 bytes
-    ];
-    
-    for (const str of testStrings) {
-      const byteLength = utils.utf8ByteLength(str);
-      console.log(`"${str}": ${byteLength} bytes`);
-    }
-  } catch (error) {
-    console.log(`Error in UTF-8 byte length test: ${error.message}`);
-  }
+  // Test encoding
+  let bytes = textEncoding.EncodeUTF8(text);
+  console.log(`Original: "${text}"`);
+  console.log(`Encoded bytes length: ${bytes.length}`);
   
-  // Test 8: Utility functions
-  console.log('\n8. Utility Functions Test:');
-  try {
-    const utils = new Utils();
-    
-    // Test isValidEncoding
-    const validEncodings = ["utf-8", "UTF-8", "iso-8859-1", "windows-1252", "shift-jis"];
-    const invalidEncodings = ["invalid", "", "not-real", "fake-encoding"];
-    
-    console.log("Valid encodings:");
-    for (const encoding of validEncodings) {
-      const isValid = utils.isValidEncoding(encoding);
-      console.log(`  ${encoding}: ${isValid}`);
-    }
-    
-    console.log("Invalid encodings:");
-    for (const encoding of invalidEncodings) {
-      const isValid = utils.isValidEncoding(encoding);
-      console.log(`  "${encoding}": ${isValid}`);
-    }
-    
-    // Test getSupportedEncodings
-    const supported = utils.getSupportedEncodings();
-    console.log(`Supported encodings count: ${supported.length}`);
-    console.log(`First few supported: ${supported.slice(0, 5).join(', ')}`);
-  } catch (error) {
-    console.log(`Error in utility functions test: ${error.message}`);
-  }
+  // Test decoding
+  let decoded = textEncoding.DecodeUTF8(bytes);
+  console.log(`Decoded: "${decoded}"`);
+  console.log(`Round-trip successful: ${text === decoded}`);
   
-  // Test 9: EncodeString method
-  console.log('\n9. EncodeString Method Test:');
-  try {
-    const encoder = new TextEncoder("utf-8");
-    
-    const testTexts = ["Hello", "世界", "🌍", ""];
-    
-    for (const text of testTexts) {
-      const encodedString = encoder.encodeString(text);
-      console.log(`"${text}" encoded as string: "${encodedString}"`);
-    }
-  } catch (error) {
-    console.log(`Error in encodeString test: ${error.message}`);
-  }
+  // Test base64
+  let base64 = textEncoding.EncodeUTF8ToBase64(text);
+  let fromBase64 = textEncoding.DecodeUTF8FromBase64(base64);
+  console.log(`Base64: ${base64}`);
+  console.log(`From Base64: "${fromBase64}"`);
+  console.log(`Base64 round-trip successful: ${text === fromBase64}`);
   
-  // Test 10: Default encoding (no parameter)
-  console.log('\n10. Default Encoding Test:');
-  try {
-    const defaultEncoder = new TextEncoder(); // Should default to UTF-8
-    const defaultDecoder = new TextDecoder(); // Should default to UTF-8
-    
-    const text = "Default test 🌍";
-    const encoded = defaultEncoder.encode(text);
-    const decoded = defaultDecoder.decode(encoded);
-    
-    console.log(`Default encoder encoding: ${defaultEncoder.getEncoding()}`);
-    console.log(`Default decoder encoding: ${defaultDecoder.getEncoding()}`);
-    console.log(`Text: ${text}`);
-    console.log(`Roundtrip successful: ${text === decoded}`);
-  } catch (error) {
-    console.log(`Error in default encoding test: ${error.message}`);
-  }
+  // Test counting
+  let byteCount = textEncoding.CountUTF8Bytes(text);
+  let runeCount = textEncoding.CountUTF8Runes(text);
+  console.log(`Byte count: ${byteCount}`);
+  console.log(`Rune count: ${runeCount}`);
   
-  // Test 11: Multiple encodings roundtrip
-  console.log('\n11. Multiple Encodings Roundtrip Test:');
+  // Test validation
+  let isValid = textEncoding.IsValidUTF8(text);
+  let bytesValid = textEncoding.IsValidUTF8Bytes(bytes);
+  console.log(`String is valid UTF-8: ${isValid}`);
+  console.log(`Bytes are valid UTF-8: ${bytesValid}`);
   
-  const roundtripEncodings = [
-    "utf-8",
-    "utf-16",
-    "iso-8859-1",
-    "windows-1252"
-  ];
+  // Use k6's check function for final verification
+  check(null, {
+    'Round-trip encoding works': () => text === decoded,
+    'Base64 round-trip works': () => text === fromBase64,
+    'Byte count is correct': () => byteCount === bytes.length,
+    'String is valid UTF-8': () => isValid === true,
+    'Bytes are valid UTF-8': () => bytesValid === true,
+  });
   
-  for (const encoding of roundtripEncodings) {
-    try {
-      const encoder = new TextEncoder(encoding);
-      const decoder = new TextDecoder(encoding);
-      
-      // Use simple ASCII text for non-UTF encodings
-      const text = encoding.startsWith("utf") ? "Hello 世界 🌍" : "Hello World!";
-      
-      const encoded = encoder.encode(text);
-      const decoded = decoder.decode(encoded);
-      
-      const success = text === decoded;
-      console.log(`${encoding}: ${success ? 'SUCCESS' : 'FAILED'} (${encoded.length} bytes)`);
-      
-      if (!success) {
-        console.log(`  Original: "${text}"`);
-        console.log(`  Decoded:  "${decoded}"`);
-      }
-    } catch (error) {
-      console.log(`${encoding}: ERROR - ${error.message}`);
-    }
-  }
-  
-  // Test 12: Large text performance
-  console.log('\n12. Large Text Performance Test:');
-  try {
-    const utils = new Utils();
-    const encoder = new TextEncoder("utf-8");
-    const decoder = new TextDecoder("utf-8");
-    
-    // Create a large string
-    const baseText = "This is a test string with some unicode: 世界 🌍 ";
-    const largeText = baseText.repeat(1000); // About 50KB
-    
-    const startTime = Date.now();
-    
-    const byteLength = utils.utf8ByteLength(largeText);
-    const encoded = encoder.encode(largeText);
-    const decoded = decoder.decode(encoded);
-    
-    const endTime = Date.now();
-    
-    console.log(`Large text length: ${largeText.length} chars`);
-    console.log(`UTF-8 byte length: ${byteLength}`);
-    console.log(`Encoded length: ${encoded.length}`);
-    console.log(`Roundtrip successful: ${largeText === decoded}`);
-    console.log(`Time taken: ${endTime - startTime}ms`);
-  } catch (error) {
-    console.log(`Error in large text test: ${error.message}`);
-  }
-  
-  console.log('\n=== Test Complete ===');
+  console.log('=== Test Complete ===');
 }

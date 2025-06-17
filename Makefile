@@ -1,210 +1,64 @@
-.PHONY: build test clean deps build-xk6 run-test fmt lint dev-deps help test-all test-go test-k6 install-xk6 check-xk6 bench bench-profile bench-utf8 perf-test-k6 perf-test-intensive perf-compare perf-full
+# Makefile for k6 text-encoding extension
 
 # Variables
-EXTENSION_NAME = xk6-text-encoding
-MODULE_PATH = github.com/JBrVJxsc/xk6-text-encoding
-TEST_FILE = text_encoding_k6_test.js
-PERF_FILE = performance_test.js
+MODULE_NAME = github.com/JBrVJxsc/xk6-text-encoding
+K6_VERSION = v1.0.0
+XK6_VERSION = v0.20.1
+BUILD_DIR = build
+K6_BINARY = $(BUILD_DIR)/k6
+
+# Colors for output
+GREEN = \033[0;32m
+YELLOW = \033[0;33m
+RED = \033[0;31m
+NC = \033[0m # No Color
+
+.PHONY: all build clean test test-go test-k6 help
 
 # Default target
-all: deps build test-all
+all: build test
 
-# Build the extension (standalone)
-build: deps
-	go build -o $(EXTENSION_NAME) .
+# Help target
+help:
+	@echo "$(GREEN)Available targets:$(NC)"
+	@echo "  $(YELLOW)all$(NC)        - Build extension and run all tests"
+	@echo "  $(YELLOW)build$(NC)      - Build k6 binary with text-encoding extension"
+	@echo "  $(YELLOW)test$(NC)       - Run all tests (Go + k6)"
+	@echo "  $(YELLOW)test-go$(NC)    - Run Go unit tests only"
+	@echo "  $(YELLOW)test-k6$(NC)    - Run k6 JavaScript tests only"
+	@echo "  $(YELLOW)clean$(NC)      - Clean build artifacts"
+	@echo "  $(YELLOW)help$(NC)       - Show this help message"
 
-# Build with xk6
-build-xk6: check-xk6
-	xk6 build --with $(MODULE_PATH)@latest
+# Build k6 binary with extension
+build:
+	@echo "$(GREEN)Building k6 with text-encoding extension...$(NC)"
+	@mkdir -p $(BUILD_DIR)
+	cd $(BUILD_DIR) && xk6 build $(K6_VERSION) --with $(MODULE_NAME)=../
+	@echo "$(GREEN)✓ Build complete: $(K6_BINARY)$(NC)"
 
-# Build with xk6 using local code for development
-build-xk6-local: check-xk6
-	xk6 build --with $(MODULE_PATH)=.
+# Run all tests
+test: test-go test-k6
+	@echo "$(GREEN)✓ All tests completed successfully!$(NC)"
 
-# Download and tidy dependencies
-deps:
-	go mod download
-	go mod tidy
-
-# Install xk6 if not present
-install-xk6:
-	@which xk6 >/dev/null 2>&1 || { \
-		echo "Installing xk6..."; \
-		go install go.k6.io/xk6/cmd/xk6@latest; \
-	}
-
-# Check if xk6 is installed
-check-xk6:
-	@which xk6 >/dev/null 2>&1 || { \
-		echo "Error: xk6 not found. Run 'make install-xk6' to install it."; \
-		exit 1; \
-	}
-
-# Run Go tests only
+# Run Go unit tests
 test-go:
+	@echo "$(GREEN)Running Go unit tests...$(NC)"
 	go test -v ./...
+	@echo "$(GREEN)✓ Go tests completed$(NC)"
 
-# Run Go tests with coverage
-test-go-coverage:
-	go test -v -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
-
-# Run K6 tests only (requires xk6 build)
-test-k6: build-xk6
-	./k6 run $(TEST_FILE)
-
-# Run both Go and K6 tests
-test-all: test-go test-k6
-	@echo ""
-	@echo "✅ All tests completed successfully!"
-
-# Run tests and generate coverage
-test-full: test-go-coverage test-k6
-	@echo ""
-	@echo "✅ Full test suite completed with coverage!"
-
-# Run Go benchmarks
-bench:
-	@echo "Running Go benchmarks..."
-	go test -bench=. -benchmem -run=^$ ./...
-	@echo ""
-
-# Run Go benchmarks with CPU profiling
-bench-profile:
-	@echo "Running Go benchmarks with CPU profiling..."
-	go test -bench=. -benchmem -cpuprofile=cpu.prof -run=^$ ./...
-	go tool pprof cpu.prof
-	@echo ""
-
-# Run specific UTF-8 benchmarks only
-bench-utf8:
-	@echo "Running UTF-8 byte length benchmarks..."
-	go test -bench=BenchmarkUTF8ByteLength -benchmem -run=^$ ./...
-	@echo ""
-
-# Run K6 performance test
-perf-test-k6: build-xk6
-	@echo "Running K6 performance test..."
-	./k6 run --vus 1 --duration 10s $(PERF_FILE)
+# Run k6 JavaScript tests
+test-k6: build
+	@echo "$(GREEN)Running k6 JavaScript tests...$(NC)"
+	@if [ -f "text_encoding_k6_test.js" ]; then \
+		$(K6_BINARY) run text_encoding_k6_test.js; \
+	else \
+		echo "$(RED)Error: text_encoding_k6_test.js not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✓ k6 tests completed$(NC)"
 
 # Clean build artifacts
 clean:
-	rm -f $(EXTENSION_NAME)
-	rm -f k6
-	rm -f coverage.out
-	rm -f coverage.html
-	rm -f cpu.prof
-	rm -f mem.prof
-	go clean
-
-# Format Go code
-fmt:
-	go fmt ./...
-
-# Lint Go code
-lint:
-	golangci-lint run
-
-# Lint and fix issues automatically
-lint-fix:
-	golangci-lint run --fix
-
-# Install development dependencies
-dev-deps: install-xk6
-	@echo "Installing development dependencies..."
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@echo "Development dependencies installed."
-
-# Run the K6 test script (alias for test-k6)
-run-test: test-k6
-
-# Verify the module
-verify:
-	go mod verify
-
-# Security check
-security:
-	@which gosec >/dev/null 2>&1 || { \
-		echo "Installing gosec..."; \
-		go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest; \
-	}
-	gosec ./...
-
-# Performance test with K6
-perf-test: build-xk6
-	./k6 run --vus 10 --duration 30s $(TEST_FILE)
-
-# Run K6 performance test
-perf-test-k6: build-xk6
-	@echo "Running K6 performance test..."
-	./k6 run --vus 1 --duration 10s performance_test.js
-
-# Compare Go vs K6 performance
-perf-compare: bench-utf8 perf-test-k6
-	@echo ""
-	@echo "🔍 Performance comparison completed!"
-	@echo "📊 Check the output above to compare Go vs K6 implementations"
-	@echo ""
-
-# Quick development cycle: format, lint, test
-dev: fmt lint test-all
-
-# Prepare for release: full checks
-release-check: deps fmt lint security verify test-full
-	@echo "✅ Release checks completed successfully!"
-
-# Initialize project (run once after clone)
-init: dev-deps deps
-	@echo "Project initialized successfully!"
-
-# Show detailed help
-help:
-	@echo "=== $(EXTENSION_NAME) Build System ==="
-	@echo ""
-	@echo "Quick Commands:"
-	@echo "  make dev          - Quick development cycle (fmt + lint + test)"
-	@echo "  make test-all     - Run both Go and K6 tests"
-	@echo "  make build-xk6    - Build with xk6"
-	@echo ""
-	@echo "Build Commands:"
-	@echo "  make build        - Build the extension (standalone)"
-	@echo "  make build-xk6    - Build with xk6 (latest from GitHub)"
-	@echo "  make build-xk6-local - Build with xk6 (local code)"
-	@echo ""
-	@echo "Test Commands:"
-	@echo "  make test-go      - Run Go tests only"
-	@echo "  make test-k6      - Run K6 tests only"
-	@echo "  make test-all     - Run both Go and K6 tests"
-	@echo "  make test-full    - Run tests with coverage report"
-	@echo "  make perf-test    - Run performance test with K6"
-	@echo ""
-	@echo "Benchmark Commands:"
-	@echo "  make bench        - Run all Go benchmarks"
-	@echo "  make bench-utf8   - Run UTF-8 specific benchmarks"
-	@echo "  make bench-profile - Run benchmarks with CPU profiling"
-	@echo "  make perf-test-k6 - Run K6 performance test (light)"
-	@echo "  make perf-test-intensive - Run intensive K6 performance test"
-	@echo "  make perf-compare - Compare Go vs K6 performance"
-	@echo "  make perf-full    - Run complete performance test suite"
-	@echo ""
-	@echo "Development Commands:"
-	@echo "  make deps         - Download and tidy dependencies"
-	@echo "  make fmt          - Format Go code"
-	@echo "  make lint         - Lint Go code"
-	@echo "  make lint-fix     - Lint and auto-fix issues"
-	@echo "  make security     - Run security checks"
-	@echo ""
-	@echo "Utility Commands:"
-	@echo "  make clean        - Clean build artifacts"
-	@echo "  make verify       - Verify module dependencies"
-	@echo "  make dev-deps     - Install development dependencies"
-	@echo "  make install-xk6  - Install xk6 tool"
-	@echo "  make init         - Initialize project (run once)"
-	@echo "  make release-check - Full pre-release validation"
-	@echo "  make help         - Show this help"
-	@echo ""
-	@echo "Files:"
-	@echo "  Test file: $(TEST_FILE)"
-	@echo "  Perf file: $(PERF_FILE)"
-	@echo "  Module:    $(MODULE_PATH)"
+	@echo "$(GREEN)Cleaning build artifacts...$(NC)"
+	rm -rf $(BUILD_DIR)
+	@echo "$(GREEN)✓ Clean completed$(NC)"

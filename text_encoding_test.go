@@ -1,313 +1,448 @@
 package text_encoding
 
 import (
-	"bytes"
+	"encoding/base64"
 	"testing"
-
-	"golang.org/x/text/encoding/unicode"
 )
 
-func TestGetEncoding(t *testing.T) {
+func TestEncodeUTF8(t *testing.T) {
+	te := &TextEncoding{}
+
 	tests := []struct {
 		name     string
-		label    string
-		wantErr  bool
-		expected string
-	}{
-		{"UTF-8", "utf-8", false, "utf-8"},
-		{"UTF-8 uppercase", "UTF-8", false, "utf-8"},
-		{"UTF-8 with spaces", " utf-8 ", false, "utf-8"},
-		{"UTF-16", "utf-16", false, "utf-16"},
-		{"ISO-8859-1", "iso-8859-1", false, "iso-8859-1"},
-		{"Latin1 alias", "latin1", false, "iso-8859-1"},
-		{"Windows-1252", "windows-1252", false, "windows-1252"},
-		{"Shift-JIS", "shift-jis", false, "shift-jis"},
-		{"Shift-JIS variant", "sjis", false, "shift-jis"},
-		{"GBK", "gbk", false, "gbk"},
-		{"Invalid encoding", "invalid-encoding", true, ""},
-		{"Empty string", "", true, ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			encoding, err := getEncoding(tt.label)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getEncoding() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && encoding == nil {
-				t.Errorf("getEncoding() returned nil encoding for valid label")
-			}
-		})
-	}
-}
-
-func TestTextEncoder_Encode(t *testing.T) {
-	tests := []struct {
-		name     string
-		label    string
-		text     string
-		wantErr  bool
+		input    string
 		expected []byte
 	}{
-		{"UTF-8 simple", "utf-8", "Hello", false, []byte("Hello")},
-		{"UTF-8 unicode", "utf-8", "Hello, 世界!", false, []byte("Hello, 世界!")},
-		{"UTF-8 emoji", "utf-8", "🌍", false, []byte("🌍")},
-		{"UTF-8 empty", "utf-8", "", false, []byte{}},
-		{"ISO-8859-1 simple", "iso-8859-1", "Hello", false, nil}, // We'll check length
+		{
+			name:     "empty string",
+			input:    "",
+			expected: []byte{},
+		},
+		{
+			name:     "ascii text",
+			input:    "hello",
+			expected: []byte{'h', 'e', 'l', 'l', 'o'},
+		},
+		{
+			name:     "unicode text",
+			input:    "Hello 🌍",
+			expected: []byte{'H', 'e', 'l', 'l', 'o', ' ', 0xF0, 0x9F, 0x8C, 0x8D},
+		},
+		{
+			name:     "chinese characters",
+			input:    "你好",
+			expected: []byte{0xE4, 0xBD, 0xA0, 0xE5, 0xA5, 0xBD},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			encoder := &TextEncoder{label: tt.label}
-			enc, err := getEncoding(tt.label)
-			if err != nil {
-				t.Fatalf("Failed to get encoding: %v", err)
-			}
-			encoder.encoding = enc
-
-			result, err := encoder.Encode(tt.text)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("TextEncoder.Encode() error = %v, wantErr %v", err, tt.wantErr)
+			result := te.EncodeUTF8(tt.input)
+			if len(result) != len(tt.expected) {
+				t.Errorf("EncodeUTF8() length = %d, want %d", len(result), len(tt.expected))
 				return
 			}
-
-			if !tt.wantErr {
-				if tt.expected != nil && !bytes.Equal(result, tt.expected) {
-					t.Errorf("TextEncoder.Encode() = %v, want %v", result, tt.expected)
-				}
-				if len(result) == 0 && tt.text != "" {
-					t.Errorf("TextEncoder.Encode() returned empty result for non-empty input")
+			for i, b := range result {
+				if b != tt.expected[i] {
+					t.Errorf("EncodeUTF8()[%d] = %02x, want %02x", i, b, tt.expected[i])
 				}
 			}
 		})
 	}
 }
 
-func TestTextEncoder_EncodeString(t *testing.T) {
-	encoder := &TextEncoder{
-		encoding: unicode.UTF8,
-		label:    "utf-8",
-	}
+func TestEncodeUTF8ToBase64(t *testing.T) {
+	te := &TextEncoding{}
 
-	tests := []struct {
-		name string
-		text string
-	}{
-		{"Simple text", "Hello World"},
-		{"Unicode text", "Hello, 世界!"},
-		{"Empty string", ""},
-		{"Special chars", "áéíóú ñ ç ß € ¥ £"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := encoder.EncodeString(tt.text)
-			if err != nil {
-				t.Errorf("TextEncoder.EncodeString() error = %v", err)
-				return
-			}
-
-			// For UTF-8, the string should be the same as the original
-			if encoder.label == "utf-8" && result != tt.text {
-				t.Errorf("TextEncoder.EncodeString() = %v, want %v", result, tt.text)
-			}
-		})
-	}
-}
-
-func TestTextEncoder_GetEncoding(t *testing.T) {
-	encoder := &TextEncoder{label: "utf-8"}
-	if got := encoder.GetEncoding(); got != "utf-8" {
-		t.Errorf("TextEncoder.GetEncoding() = %v, want %v", got, "utf-8")
-	}
-}
-
-func TestTextDecoder_Decode(t *testing.T) {
 	tests := []struct {
 		name     string
-		label    string
-		data     []byte
+		input    string
 		expected string
-		wantErr  bool
 	}{
-		{"UTF-8 simple", "utf-8", []byte("Hello"), "Hello", false},
-		{"UTF-8 unicode", "utf-8", []byte("Hello, 世界!"), "Hello, 世界!", false},
-		{"UTF-8 empty", "utf-8", []byte{}, "", false},
-		{"UTF-8 emoji", "utf-8", []byte("🌍"), "🌍", false},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "simple text",
+			input:    "hello",
+			expected: base64.StdEncoding.EncodeToString([]byte("hello")),
+		},
+		{
+			name:     "unicode text",
+			input:    "Hello 🌍",
+			expected: base64.StdEncoding.EncodeToString([]byte("Hello 🌍")),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			decoder := &TextDecoder{label: tt.label}
-			enc, err := getEncoding(tt.label)
-			if err != nil {
-				t.Fatalf("Failed to get encoding: %v", err)
+			result := te.EncodeUTF8ToBase64(tt.input)
+			if result != tt.expected {
+				t.Errorf("EncodeUTF8ToBase64() = %v, want %v", result, tt.expected)
 			}
-			decoder.encoding = enc
+		})
+	}
+}
 
-			result, err := decoder.Decode(tt.data)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("TextDecoder.Decode() error = %v, wantErr %v", err, tt.wantErr)
+func TestDecodeUTF8(t *testing.T) {
+	te := &TextEncoding{}
+
+	tests := []struct {
+		name        string
+		input       []byte
+		expected    string
+		expectError bool
+	}{
+		{
+			name:        "nil input",
+			input:       nil,
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "empty bytes",
+			input:       []byte{},
+			expected:    "",
+			expectError: false,
+		},
+		{
+			name:        "valid ascii",
+			input:       []byte{'h', 'e', 'l', 'l', 'o'},
+			expected:    "hello",
+			expectError: false,
+		},
+		{
+			name:        "valid unicode",
+			input:       []byte{'H', 'e', 'l', 'l', 'o', ' ', 0xF0, 0x9F, 0x8C, 0x8D},
+			expected:    "Hello 🌍",
+			expectError: false,
+		},
+		{
+			name:        "invalid utf-8 sequence",
+			input:       []byte{0xFF, 0xFE},
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "incomplete utf-8 sequence",
+			input:       []byte{0xF0, 0x9F},
+			expected:    "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := te.DecodeUTF8(tt.input)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("DecodeUTF8() expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("DecodeUTF8() unexpected error: %v", err)
 				return
 			}
 
 			if result != tt.expected {
-				t.Errorf("TextDecoder.Decode() = %v, want %v", result, tt.expected)
+				t.Errorf("DecodeUTF8() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestTextDecoder_GetEncoding(t *testing.T) {
-	decoder := &TextDecoder{label: "iso-8859-1"}
-	if got := decoder.GetEncoding(); got != "iso-8859-1" {
-		t.Errorf("TextDecoder.GetEncoding() = %v, want %v", got, "iso-8859-1")
+func TestDecodeUTF8FromBase64(t *testing.T) {
+	te := &TextEncoding{}
+
+	tests := []struct {
+		name        string
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{
+			name:        "empty string",
+			input:       "",
+			expected:    "",
+			expectError: false,
+		},
+		{
+			name:        "valid base64 ascii",
+			input:       base64.StdEncoding.EncodeToString([]byte("hello")),
+			expected:    "hello",
+			expectError: false,
+		},
+		{
+			name:        "valid base64 unicode",
+			input:       base64.StdEncoding.EncodeToString([]byte("Hello 🌍")),
+			expected:    "Hello 🌍",
+			expectError: false,
+		},
+		{
+			name:        "invalid base64",
+			input:       "invalid base64!@#",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "base64 with invalid utf-8",
+			input:       base64.StdEncoding.EncodeToString([]byte{0xFF, 0xFE}),
+			expected:    "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := te.DecodeUTF8FromBase64(tt.input)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("DecodeUTF8FromBase64() expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("DecodeUTF8FromBase64() unexpected error: %v", err)
+				return
+			}
+
+			if result != tt.expected {
+				t.Errorf("DecodeUTF8FromBase64() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
 
-func TestUtils_UTF8ByteLength(t *testing.T) {
-	utils := &Utils{}
+func TestCountUTF8Bytes(t *testing.T) {
+	te := &TextEncoding{}
 
 	tests := []struct {
 		name     string
 		input    string
 		expected int
 	}{
-		{"Empty string", "", 0},
-		{"ASCII only", "Hello", 5},
-		{"ASCII with space", "Hello World", 11},
-		{"Unicode chars", "Hello, 世界!", 14}, // 7 ASCII + 6 bytes for 2 Chinese chars + 1 for !
-		{"Emoji", "🌍", 4},                   // Emoji is 4 bytes in UTF-8
-		{"Mixed", "Hello 🌍 世界", 17},         // 6 ASCII + 4 emoji + 1 space + 6 Chinese
-		{"Special chars", "áéíóú", 10},      // Each accented char is 2 bytes in UTF-8
+		{
+			name:     "empty string",
+			input:    "",
+			expected: 0,
+		},
+		{
+			name:     "ascii text",
+			input:    "hello",
+			expected: 5,
+		},
+		{
+			name:     "unicode text with emoji",
+			input:    "Hello 🌍",
+			expected: 12, // "Hello " (6 bytes) + 🌍 (4 bytes) = 10 bytes
+		},
+		{
+			name:     "chinese characters",
+			input:    "你好",
+			expected: 6, // 3 bytes per character
+		},
+		{
+			name:     "mixed content",
+			input:    "café 🚀",
+			expected: 10, // c(1) + a(1) + f(1) + é(2) + space(1) + rocket(4) = 10
+		},
+		{
+			name:     "only emojis",
+			input:    "🚀🌍💻",
+			expected: 12, // 4 bytes each
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := utils.UTF8ByteLength(tt.input)
+			result := te.CountUTF8Bytes(tt.input)
 			if result != tt.expected {
-				t.Errorf("Utils.UTF8ByteLength(%q) = %d, want %d", tt.input, result, tt.expected)
+				t.Errorf("CountUTF8Bytes() = %d, want %d", result, tt.expected)
+				t.Errorf("Actual byte length: %d", len([]byte(tt.input)))
 			}
 		})
 	}
 }
 
-func TestUtils_IsValidEncoding(t *testing.T) {
-	utils := &Utils{}
+func TestCountUTF8Runes(t *testing.T) {
+	te := &TextEncoding{}
 
 	tests := []struct {
 		name     string
-		encoding string
+		input    string
+		expected int
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: 0,
+		},
+		{
+			name:     "ascii text",
+			input:    "hello",
+			expected: 5,
+		},
+		{
+			name:     "unicode text with emoji",
+			input:    "Hello 🌍",
+			expected: 7, // 6 chars + 1 emoji
+		},
+		{
+			name:     "chinese characters",
+			input:    "你好",
+			expected: 2,
+		},
+		{
+			name:     "mixed content",
+			input:    "café 🚀",
+			expected: 6, // c + a + f + é + space + rocket
+		},
+		{
+			name:     "only emojis",
+			input:    "🚀🌍💻",
+			expected: 3, // 3 emoji characters
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := te.CountUTF8Runes(tt.input)
+			if result != tt.expected {
+				t.Errorf("CountUTF8Runes() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidUTF8(t *testing.T) {
+	te := &TextEncoding{}
+
+	tests := []struct {
+		name     string
+		input    string
 		expected bool
 	}{
-		{"UTF-8", "utf-8", true},
-		{"UTF-8 uppercase", "UTF-8", true},
-		{"UTF-16", "utf-16", true},
-		{"ISO-8859-1", "iso-8859-1", true},
-		{"Latin1 alias", "latin1", true},
-		{"Windows-1252", "windows-1252", true},
-		{"Shift-JIS", "shift-jis", true},
-		{"GBK", "gbk", true},
-		{"Invalid", "invalid-encoding", false},
-		{"Empty", "", false},
-		{"Nonsense", "definitely-not-real", false},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: true,
+		},
+		{
+			name:     "valid ascii",
+			input:    "hello",
+			expected: true,
+		},
+		{
+			name:     "valid unicode",
+			input:    "Hello 🌍 你好",
+			expected: true,
+		},
+		{
+			name:     "valid string with special chars",
+			input:    "café naïve résumé",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := utils.IsValidEncoding(tt.encoding)
+			result := te.IsValidUTF8(tt.input)
 			if result != tt.expected {
-				t.Errorf("Utils.IsValidEncoding(%q) = %v, want %v", tt.encoding, result, tt.expected)
+				t.Errorf("IsValidUTF8() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestUtils_GetSupportedEncodings(t *testing.T) {
-	utils := &Utils{}
+func TestIsValidUTF8Bytes(t *testing.T) {
+	te := &TextEncoding{}
 
-	encodings := utils.GetSupportedEncodings()
-
-	if len(encodings) == 0 {
-		t.Error("GetSupportedEncodings() returned empty slice")
-	}
-
-	// Check that some expected encodings are in the list
-	expectedEncodings := []string{"utf-8", "utf-16", "iso-8859-1", "windows-1252", "shift-jis", "gbk"}
-
-	for _, expected := range expectedEncodings {
-		found := false
-		for _, encoding := range encodings {
-			if encoding == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected encoding %q not found in supported encodings", expected)
-		}
-	}
-}
-
-func TestEncodeDecodeRoundtrip(t *testing.T) {
 	tests := []struct {
 		name     string
-		encoding string
-		text     string
+		input    []byte
+		expected bool
 	}{
-		{"UTF-8", "utf-8", "Hello, 世界! 🌍"},
-		{"ISO-8859-1", "iso-8859-1", "Hello World"},
-		{"Windows-1252", "windows-1252", "Hello World"},
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: true, // utf8.Valid returns true for nil
+		},
+		{
+			name:     "empty bytes",
+			input:    []byte{},
+			expected: true,
+		},
+		{
+			name:     "valid ascii bytes",
+			input:    []byte("hello"),
+			expected: true,
+		},
+		{
+			name:     "valid unicode bytes",
+			input:    []byte("Hello 🌍"),
+			expected: true,
+		},
+		{
+			name:     "invalid utf-8 sequence",
+			input:    []byte{0xFF, 0xFE},
+			expected: false,
+		},
+		{
+			name:     "incomplete utf-8 sequence",
+			input:    []byte{0xF0, 0x9F},
+			expected: false,
+		},
+		{
+			name:     "overlong encoding",
+			input:    []byte{0xC0, 0x80}, // overlong encoding of null byte
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			enc, err := getEncoding(tt.encoding)
-			if err != nil {
-				t.Fatalf("Failed to get encoding: %v", err)
-			}
-
-			encoder := &TextEncoder{encoding: enc, label: tt.encoding}
-			decoder := &TextDecoder{encoding: enc, label: tt.encoding}
-
-			// Encode
-			encoded, err := encoder.Encode(tt.text)
-			if err != nil {
-				t.Fatalf("Failed to encode: %v", err)
-			}
-
-			// Decode
-			decoded, err := decoder.Decode(encoded)
-			if err != nil {
-				t.Fatalf("Failed to decode: %v", err)
-			}
-
-			// For encodings that can't represent all Unicode chars, we might not get exact match
-			// But for UTF-8, we should get exact match
-			if tt.encoding == "utf-8" && decoded != tt.text {
-				t.Errorf("Roundtrip failed: got %q, want %q", decoded, tt.text)
+			result := te.IsValidUTF8Bytes(tt.input)
+			if result != tt.expected {
+				t.Errorf("IsValidUTF8Bytes() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestBufferPool(t *testing.T) {
-	// Test that buffer pool works correctly
-	buf1 := getBuffer()
-	buf1.WriteString("test")
+// Benchmark tests
+func BenchmarkEncodeUTF8(b *testing.B) {
+	te := &TextEncoding{}
+	text := "Hello 🌍 世界 café naïve résumé"
 
-	if buf1.Len() != 4 {
-		t.Errorf("Buffer should have length 4, got %d", buf1.Len())
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		te.EncodeUTF8(text)
 	}
+}
 
-	putBuffer(buf1)
+func BenchmarkCountUTF8Bytes(b *testing.B) {
+	te := &TextEncoding{}
+	text := "Hello 🌍 世界 café naïve résumé"
 
-	// After putting back, buffer should be reset
-	buf2 := getBuffer()
-	if buf2.Len() != 0 {
-		t.Errorf("Buffer should be reset, got length %d", buf2.Len())
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		te.CountUTF8Bytes(text)
 	}
+}
 
-	putBuffer(buf2)
+func BenchmarkCountUTF8Runes(b *testing.B) {
+	te := &TextEncoding{}
+	text := "Hello 🌍 世界 café naïve résumé"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		te.CountUTF8Runes(text)
+	}
 }

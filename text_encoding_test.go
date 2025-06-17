@@ -179,3 +179,95 @@ func TestGetSupportedEncodings(t *testing.T) {
 		}
 	}
 }
+
+func TestUTF8ByteLength(t *testing.T) {
+	te := &TextEncoding{}
+
+	testCases := []struct {
+		input    string
+		expected int
+	}{
+		{"", 0},
+		{"Hello", 5},
+		{"Hello, 世界!", 14}, // "Hello, " (7) + "世界" (6) + "!" (1) = 14
+		{"🌍", 4},           // Emoji is 4 bytes in UTF-8
+		{"áéíóú", 10},      // Each accented character is 2 bytes
+		{"1234567890", 10},
+		{"!@#$%^&*()", 10},
+		{"Hello, 世界! 🌍", 19}, // "Hello, " (7) + "世界" (6) + "! " (2) + "🌍" (4) = 19
+	}
+
+	for _, tc := range testCases {
+		result := te.UTF8ByteLength(tc.input)
+		if result != tc.expected {
+			t.Errorf("UTF8ByteLength(%q) = %d, expected %d", tc.input, result, tc.expected)
+		}
+	}
+}
+
+func TestUTF8ByteLengthOptimized(t *testing.T) {
+	te := &TextEncoding{}
+
+	testCases := []struct {
+		input    string
+		expected int
+	}{
+		{"", 0},
+		{"Hello", 5},
+		{"Hello, 世界!", 14}, // "Hello, " (7) + "世界" (6) + "!" (1) = 14
+		{"🌍", 4},           // Emoji is 4 bytes in UTF-8
+		{"áéíóú", 10},      // Each accented character is 2 bytes
+		{"1234567890", 10},
+		{"!@#$%^&*()", 10},
+		{"Hello, 世界! 🌍", 19}, // "Hello, " (7) + "世界" (6) + "! " (2) + "🌍" (4) = 19
+	}
+
+	for _, tc := range testCases {
+		result := te.UTF8ByteLengthOptimized(tc.input)
+		if result != tc.expected {
+			t.Errorf("UTF8ByteLengthOptimized(%q) = %d, expected %d", tc.input, result, tc.expected)
+		}
+	}
+}
+
+func TestUTF8ByteLengthConsistency(t *testing.T) {
+	te := &TextEncoding{}
+
+	testStrings := []string{
+		"",
+		"Hello",
+		"Hello, 世界!",
+		"🌍",
+		"áéíóú",
+		"1234567890",
+		"!@#$%^&*()",
+		"Hello, 世界! 🌍",
+		"Special chars: áéíóú ñ ç ß € ¥ £",
+		"Mixed: Hello 世界 🌍 áéíóú 123 !@#",
+	}
+
+	for _, str := range testStrings {
+		fast := te.UTF8ByteLength(str)
+		optimized := te.UTF8ByteLengthOptimized(str)
+
+		if fast != optimized {
+			t.Errorf("Inconsistent results for %q: fast=%d, optimized=%d", str, fast, optimized)
+		}
+
+		// Also verify against actual UTF-8 encoding
+		encoder, err := te.NewTextEncoder("utf-8")
+		if err != nil {
+			t.Fatalf("Failed to create UTF-8 encoder: %v", err)
+		}
+
+		encoded, err := encoder.Encode(str)
+		if err != nil {
+			t.Fatalf("Failed to encode %q: %v", str, err)
+		}
+
+		actualLength := len(encoded)
+		if fast != actualLength {
+			t.Errorf("UTF8ByteLength(%q) = %d, but actual UTF-8 encoding length = %d", str, fast, actualLength)
+		}
+	}
+}

@@ -267,3 +267,30 @@ func (*TextEncoding) GetSupportedEncodings() []string {
 		"euc-kr", "euckr",
 	}
 }
+
+// UTF8ByteLength returns the byte length of a string when encoded in UTF-8
+// This is much faster than the JavaScript equivalent as it uses Go's optimized UTF-8 handling
+func (*TextEncoding) UTF8ByteLength(str string) int {
+	// For UTF-8, the byte length is simply len(str) since Go strings are UTF-8 encoded
+	// This is the most efficient way to get UTF-8 byte length in Go
+	return len(str)
+}
+
+// UTF8ByteLengthOptimized is an alternative implementation that manually calculates UTF-8 byte length
+// This can be useful for educational purposes or when you need to understand the UTF-8 encoding process
+func (*TextEncoding) UTF8ByteLengthOptimized(str string) int {
+	bytes := 0
+	for _, r := range str {
+		switch {
+		case r <= 0x7f:
+			bytes += 1
+		case r <= 0x7ff:
+			bytes += 2
+		case r <= 0xffff:
+			bytes += 3
+		default:
+			bytes += 4
+		}
+	}
+	return bytes
+}

@@ -48,6 +48,36 @@ export default function () {
 }
 ```
 
+### UTF-8 Byte Length
+
+```javascript
+import { TextEncoding } from 'k6/x/text-encoding';
+
+export default function () {
+  const textEncoding = new TextEncoding();
+  
+  // Get UTF-8 byte length of strings
+  const strings = ["Hello", "Hello, 世界!", "🌍", "áéíóú"];
+  
+  for (const str of strings) {
+    const byteLength = textEncoding.utf8ByteLength(str);
+    console.log(`"${str}": ${byteLength} bytes`);
+  }
+  
+  // Performance comparison with JavaScript implementation
+  const longString = "Hello, 世界! 🌍 ".repeat(1000);
+  
+  // Much faster than JavaScript implementation
+  const start = Date.now();
+  for (let i = 0; i < 10000; i++) {
+    textEncoding.utf8ByteLength(longString);
+  }
+  const end = Date.now();
+  
+  console.log(`Processed 10,000 iterations in ${end - start}ms`);
+}
+```
+
 ### Different Encodings
 
 ```javascript
@@ -178,6 +208,16 @@ Checks if the given encoding label is supported.
 ##### `getSupportedEncodings()`
 Returns a list of all supported encoding labels.
 - Returns: `[]string` - Array of supported encoding labels.
+
+##### `utf8ByteLength(str)`
+Returns the byte length of a string when encoded in UTF-8. This is much faster than JavaScript implementations.
+- `str` (string): The input string to measure.
+- Returns: `number` - Number of bytes when encoded in UTF-8.
+
+##### `utf8ByteLengthOptimized(str)`
+Alternative implementation that manually calculates UTF-8 byte length. Useful for educational purposes.
+- `str` (string): The input string to measure.
+- Returns: `number` - Number of bytes when encoded in UTF-8.
 
 ## Supported Encodings
 

@@ -177,9 +177,9 @@ func TestUtils_UTF8ByteLength(t *testing.T) {
 		{"Empty string", "", 0},
 		{"ASCII only", "Hello", 5},
 		{"ASCII with space", "Hello World", 11},
-		{"Unicode chars", "Hello, 世界!", 13}, // 7 ASCII + 6 bytes for 2 Chinese chars
+		{"Unicode chars", "Hello, 世界!", 14}, // 7 ASCII + 6 bytes for 2 Chinese chars + 1 for !
 		{"Emoji", "🌍", 4},                   // Emoji is 4 bytes in UTF-8
-		{"Mixed", "Hello 🌍 世界", 16},         // 6 ASCII + 4 emoji + 1 space + 6 Chinese + 1 space
+		{"Mixed", "Hello 🌍 世界", 17},         // 6 ASCII + 4 emoji + 1 space + 6 Chinese
 		{"Special chars", "áéíóú", 10},      // Each accented char is 2 bytes in UTF-8
 	}
 
